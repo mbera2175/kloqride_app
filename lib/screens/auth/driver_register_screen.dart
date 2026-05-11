@@ -16,7 +16,6 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
   final _formKey      = GlobalKey<FormState>();
   final _nameCtrl     = TextEditingController();
   final _emailCtrl    = TextEditingController();
-  final _referralCtrl = TextEditingController();
 
   String _gender   = 'male';
   String _language = 'en';
@@ -31,7 +30,6 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
         email    : _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         gender   : _gender,
         language : _language,
-        referral : _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim().toUpperCase(),
       ),
     ));
   }
@@ -40,7 +38,6 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
-    _referralCtrl.dispose();
     super.dispose();
   }
 
@@ -146,16 +143,6 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
                     onChanged: (v) => setState(() => _language = v!),
                   ),
                   const SizedBox(height: 16),
-
-                  // Referral
-                  _label('Referral Code (Optional)'),
-                  TextFormField(
-                    controller: _referralCtrl,
-                    textCapitalization: TextCapitalization.characters,
-                    style: GoogleFonts.poppins(fontSize: 14),
-                    decoration: _deco('Enter referral code',
-                        Icons.card_giftcard_rounded),
-                  ),
 
                   const SizedBox(height: 32),
 

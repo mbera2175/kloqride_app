@@ -68,13 +68,13 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> registerRider(Map<String, dynamic> body) async {
-    final res = await http.post(Uri.parse('$_base/auth/rider/register'),
+    final res = await http.post(Uri.parse('$_base/auth/register/rider'),
       headers: _headers, body: jsonEncode(body));
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> registerDriver(Map<String, dynamic> body) async {
-    final res = await http.post(Uri.parse('$_base/auth/driver/register'),
+    final res = await http.post(Uri.parse('$_base/auth/register/driver'),
       headers: _headers, body: jsonEncode(body));
     return _handle(res);
   }

@@ -34,17 +34,19 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
   final _colorCtrl = TextEditingController();
 
   String _vehicleType  = 'auto';
-  String _serviceType  = 'ride';
+  List<String> _selectedServices = ['ride'];
   int    _regYear      = DateTime.now().year;
   int    _expireYear   = DateTime.now().year + 1;
   String _error        = '';
 
   final List<Map<String, dynamic>> _vehicles = [
-    {'type': 'bike',  'icon': '🏍️', 'label': 'Bike'},
-    {'type': 'auto',  'icon': '🛺',  'label': 'Auto'},
-    {'type': 'mini',  'icon': '🚗',  'label': 'Mini'},
-    {'type': 'sedan', 'icon': '🚙',  'label': 'Sedan'},
-    {'type': 'suv',   'icon': '🚐',  'label': 'SUV'},
+    {'type': 'bike',      'icon': Icons.two_wheeler_rounded,      'label': 'Bike'},
+    {'type': 'auto',      'icon': Icons.local_taxi_rounded,       'label': 'Auto'},
+    {'type': 'toto',      'icon': Icons.electric_rickshaw_rounded,'label': 'Toto'},
+    {'type': 'mini',      'icon': Icons.directions_car_rounded,   'label': 'Mini'},
+    {'type': 'sedan',     'icon': Icons.time_to_leave_rounded,    'label': 'Sedan'},
+    {'type': 'suv',       'icon': Icons.airport_shuttle_rounded,  'label': 'SUV'},
+    {'type': 'ambulance', 'icon': Icons.medical_services_rounded, 'label': 'Ambulance'},
   ];
 
   void _next() {
@@ -70,7 +72,7 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         language    : widget.language,
         referral    : widget.referral,
         vehicleType : _vehicleType,
-        serviceType : _serviceType,
+        serviceType : _selectedServices.join(','),
         plateNumber : _plateCtrl.text.trim().toUpperCase(),
         brand       : _brandCtrl.text.trim(),
         model       : _modelCtrl.text.trim(),
@@ -92,7 +94,7 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         language   : widget.language,
         referral   : widget.referral,
         vehicleType: _vehicleType,
-        serviceType: _serviceType,
+        serviceType: _selectedServices.join(','),
         plateNumber: '',
         brand      : '',
         model      : '',
@@ -166,13 +168,23 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
 
                 // ── Service Type ──────────────────────
                 _label('Service Type *'),
-                Row(children: [
-                  Expanded(child: _serviceCard(
-                      'ride', '🚗', 'Rides', 'Carry passengers')),
-                  const SizedBox(width: 12),
-                  Expanded(child: _serviceCard(
-                      'delivery', '📦', 'Delivery', 'Deliver packages')),
-                ]),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 2.5,
+                  children: [
+                    _serviceCard('ride', Icons.person_rounded, 'Rides', 'Passengers'),
+                    if (_vehicleType == 'bike' || _vehicleType == 'toto')
+                      _serviceCard('delivery', Icons.inventory_2_rounded, 'Delivery', 'Packages'),
+                    if (_vehicleType == 'bike') ...[
+                      _serviceCard('food', Icons.fastfood_rounded, 'Food', 'Meals'),
+                      _serviceCard('medicine', Icons.medical_information_rounded, 'Medicine', 'Meds'),
+                    ]
+                  ],
+                ),
 
                 const SizedBox(height: 16),
 
@@ -258,10 +270,15 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
 
   // ── Small widgets ──────────────────────────────────────
 
-  Widget _vehicleCard(String type, String emoji, String label) {
+  Widget _vehicleCard(String type, IconData iconData, String label) {
     final selected = _vehicleType == type;
     return GestureDetector(
-      onTap: () => setState(() => _vehicleType = type),
+      onTap: () {
+        setState(() {
+          _vehicleType = type;
+          _selectedServices = ['ride']; // Reset on vehicle change
+        });
+      },
       child: Container(
         decoration: BoxDecoration(
           color: selected
@@ -274,7 +291,7 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 26)),
+            Icon(iconData, size: 26, color: selected ? AppColors.driverColor : AppColors.textPrimary),
             const SizedBox(height: 4),
             Text(label, style: GoogleFonts.poppins(
               fontSize: 11, fontWeight: FontWeight.w600,
@@ -287,12 +304,26 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
   }
 
   Widget _serviceCard(
-      String type, String emoji, String title, String sub) {
-    final selected = _serviceType == type;
+      String type, IconData iconData, String title, String sub) {
+    final selected = _selectedServices.contains(type);
     return GestureDetector(
-      onTap: () => setState(() => _serviceType = type),
+      onTap: () {
+        setState(() {
+          if (selected) {
+            if (_selectedServices.length > 1) { // Prevent deselecting if it's the only one
+              _selectedServices.remove(type);
+            }
+          } else {
+            if (_vehicleType != 'bike' && _vehicleType != 'toto') {
+              _selectedServices = ['ride']; // Enforce only ride for cars
+            } else {
+              _selectedServices.add(type);
+            }
+          }
+        });
+      },
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: selected
               ? AppColors.driverColor.withOpacity(0.08)
@@ -301,17 +332,23 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
             color: selected ? AppColors.driverColor : AppColors.divider,
             width: selected ? 2 : 1.5),
           borderRadius: BorderRadius.circular(12)),
-        child: Column(children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: 6),
-          Text(title, style: GoogleFonts.poppins(
-            fontSize: 13, fontWeight: FontWeight.w600,
-            color: selected
-                ? AppColors.driverColor
-                : AppColors.textPrimary)),
-          Text(sub, textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 10, color: AppColors.textSecondary)),
+        child: Row(children: [
+          Icon(iconData, size: 24, color: selected ? AppColors.driverColor : AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title, style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: selected
+                      ? AppColors.driverColor
+                      : AppColors.textPrimary)),
+                Text(sub, style: GoogleFonts.poppins(
+                  fontSize: 10, color: AppColors.textSecondary)),
+            ]),
+          )
         ]),
       ),
     );

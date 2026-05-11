@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class AppConstants {
   // ── API ──────────────────────────────────────────────
   static const String baseUrl = 'https://kloqridebackendv2-production.up.railway.app';
@@ -25,10 +27,18 @@ class AppConstants {
 
   // ── Vehicle Types ─────────────────────────────────────
   static const List<Map<String, dynamic>> vehicleTypes = [
-    {'type': 'bike',  'label': 'Bike',  'icon': '🏍️', 'capacity': 1},
-    {'type': 'auto',  'label': 'Auto',  'icon': '🛺', 'capacity': 3},
-    {'type': 'mini',  'label': 'Mini',  'icon': '🚗', 'capacity': 4},
-    {'type': 'sedan', 'label': 'Sedan', 'icon': '🚙', 'capacity': 4},
-    {'type': 'suv',   'label': 'SUV',   'icon': '🚐', 'capacity': 6},
+    {'type': 'bike',       'label': 'Bike',        'icon': Icons.two_wheeler_rounded,       'capacity': 1},
+    {'type': 'cab_ac',     'label': 'Cab AC',      'icon': Icons.ac_unit_rounded,           'capacity': 4},
+    {'type': 'cab_non_ac', 'label': 'Cab Non AC',  'icon': Icons.directions_car_rounded,    'capacity': 4},
+    {'type': 'auto',       'label': 'Auto',        'icon': Icons.local_taxi_rounded,        'capacity': 3},
+    {'type': 'toto',       'label': 'Toto',        'icon': Icons.electric_rickshaw_rounded, 'capacity': 3},
+    {'type': 'ambulance',  'label': 'Ambulance',   'icon': Icons.medical_services_rounded,  'capacity': 2},
+  ];
+
+  // ── Services ──────────────────────────────────────────
+  static const List<Map<String, dynamic>> services = [
+    {'type': 'parcel',    'label': 'Parcel',    'icon': Icons.local_shipping_rounded},
+    {'type': 'food',      'label': 'Food',      'icon': Icons.restaurant_rounded},
+    {'type': 'medicine',  'label': 'Medicine',  'icon': Icons.medical_information_rounded},
   ];
 }

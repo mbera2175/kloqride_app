@@ -309,83 +309,90 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
   Widget _bookingSection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Quick Book Card ──────────────────────────
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(
-                color: AppColors.shadow, blurRadius: 10,
-                offset: const Offset(0, 4))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Where do you want to go?',
+          // ── Where To Search Bar ───────────────────────
+          GestureDetector(
+            onTap: _openSearchPage,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(50),
+                boxShadow: [BoxShadow(
+                  color: AppColors.shadow, blurRadius: 12,
+                  offset: const Offset(0, 4))],
+              ),
+              child: Row(children: [
+                const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 22),
+                const SizedBox(width: 12),
+                Text('Where to?',
                   style: GoogleFonts.poppins(
-                    fontSize: 16, fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary)),
-                const SizedBox(height: 16),
-
-                // Pickup (read-only)
-                _locationRow(
-                  icon: Icons.radio_button_checked_rounded,
-                  iconColor: AppColors.success,
-                  text: _currentAddress,
-                  isReadOnly: true,
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 11),
-                  child: Container(height: 20, width: 2,
-                    color: AppColors.divider),
-                ),
-
-                // Drop input
-                _locationRow(
-                  icon: Icons.location_on_rounded,
-                  iconColor: AppColors.error,
-                  text: null,
-                  controller: _dropCtrl,
-                  hint: 'Enter destination',
-                ),
-
-                const SizedBox(height: 16),
-
-                // Service toggle
-                Row(children: [
-                  Expanded(child: _serviceToggle('ride',     '🚗', 'Ride')),
-                  const SizedBox(width: 10),
-                  Expanded(child: _serviceToggle('delivery', '📦', 'Delivery')),
-                ]),
-              ],
+                    fontSize: 16, fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary)),
+              ]),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 28),
 
-          // ── Vehicle Types ────────────────────────────
-          Text('Select Vehicle',
-            style: GoogleFonts.poppins(
-              fontSize: 15, fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary)),
-          const SizedBox(height: 12),
+          // ── For You Section ───────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('For you',
+                style: GoogleFonts.poppins(
+                  fontSize: 17, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary)),
+              const Icon(Icons.arrow_forward_rounded,
+                size: 20, color: AppColors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-          SizedBox(
-            height: 90,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 30),
+            child: GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              childAspectRatio: 1.0,
               children: AppConstants.vehicleTypes.map((v) =>
-                _vehicleChip(v['type'], v['icon'], v['label'])
+                _vehicleCard(v['type'], v['icon'], v['label'])
               ).toList(),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 28),
+
+          // ── Services Section ──────────────────────────
+          Text('Services',
+            style: GoogleFonts.poppins(
+              fontSize: 17, fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary)),
+          const SizedBox(height: 14),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              childAspectRatio: 1.0,
+              children: AppConstants.services.map((s) =>
+                _serviceItemCard(s['icon'], s['label'])
+              ).toList(),
+            ),
+          ),
+
+          const SizedBox(height: 24),
 
           // ── Fare display ─────────────────────────────
           if (_loadingFare)
@@ -398,30 +405,26 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Book Button ──────────────────────────────
-          SizedBox(
-            width: double.infinity, height: 54,
-            child: ElevatedButton(
-              onPressed: _loadingFare ? null
-                  : (_fareData != null ? _bookTrip : _estimateFare),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+          if (_fareData != null)
+            SizedBox(
+              width: double.infinity, height: 54,
+              child: ElevatedButton(
+                onPressed: _loadingFare ? null : _bookTrip,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'Book Ride — ₹${_fareData!['estimated_fare']}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
               ),
-              child: Text(
-                _fareData != null ? 'Book Ride — ₹${_fareData!['estimated_fare']}' : 'Get Fare Estimate',
-                style: GoogleFonts.poppins(
-                  fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-          ),
 
           const SizedBox(height: 20),
-
-          // ── Quick tips ───────────────────────────────
-          _quickTips(),
         ],
       ),
     );
@@ -852,51 +855,160 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     ),
   ]);
 
-  Widget _serviceToggle(String type, String emoji, String label) {
-    final selected = _serviceType == type;
-    return GestureDetector(
-      onTap: () => setState(() { _serviceType = type; _fareData = null; }),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withOpacity(0.1) : AppColors.background,
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.divider,
-            width: selected ? 2 : 1.5),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 6),
-          Text(label, style: GoogleFonts.poppins(
-            fontSize: 13, fontWeight: FontWeight.w600,
-            color: selected ? AppColors.primary : AppColors.textSecondary)),
-        ]),
-      ),
-    );
-  }
 
-  Widget _vehicleChip(String type, String emoji, String label) {
+
+  Widget _vehicleCard(String type, IconData iconData, String label) {
     final selected = _selectedVehicle == type;
     return GestureDetector(
-      onTap: () => setState(() { _selectedVehicle = type; _fareData = null; }),
+      onTap: () {
+        setState(() { _selectedVehicle = type; _fareData = null; });
+        _openSearchPage();
+      },
       child: Container(
-        width: 80,
-        margin: const EdgeInsets.only(right: 10),
         decoration: BoxDecoration(
           color: selected ? AppColors.primary.withOpacity(0.08) : AppColors.white,
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.divider,
             width: selected ? 2 : 1.5),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadow.withOpacity(0.5),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
+          ],
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(emoji, style: const TextStyle(fontSize: 28)),
-          const SizedBox(height: 4),
+          Icon(iconData, size: 30,
+            color: selected ? AppColors.primary : AppColors.textSecondary),
+          const SizedBox(height: 6),
           Text(label, style: GoogleFonts.poppins(
             fontSize: 11, fontWeight: FontWeight.w600,
-            color: selected ? AppColors.primary : AppColors.textSecondary)),
+            color: selected ? AppColors.primary : AppColors.textPrimary)),
         ]),
+      ),
+    );
+  }
+
+  Widget _serviceItemCard(IconData iconData, String label) {
+    return GestureDetector(
+      onTap: _openSearchPage,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.divider, width: 1.5),
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(iconData, size: 30, color: AppColors.primary),
+          const SizedBox(height: 6),
+          Text(label, style: GoogleFonts.poppins(
+            fontSize: 11, fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary)),
+        ]),
+      ),
+    );
+  }
+
+  void _openSearchPage() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            
+            Text('Where are you going?', 
+              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
+            
+            const SizedBox(height: 20),
+            
+            // Pickup input
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  icon: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 20),
+                  hintText: 'Current Location',
+                  hintStyle: GoogleFonts.poppins(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Destination input
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  icon: const Icon(Icons.location_on_rounded, color: AppColors.error, size: 20),
+                  hintText: 'Search destination',
+                  hintStyle: GoogleFonts.poppins(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 30),
+            
+            // Dummy list of recent places
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: AppColors.background,
+                child: Icon(Icons.home_rounded, color: AppColors.textPrimary),
+              ),
+              title: Text('Home', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              subtitle: Text('123 Main Street', style: GoogleFonts.poppins(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _estimateFare(); // trigger fake fare
+              },
+            ),
+            const Divider(color: AppColors.divider),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: AppColors.background,
+                child: Icon(Icons.work_rounded, color: AppColors.textPrimary),
+              ),
+              title: Text('Work', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              subtitle: Text('456 Business Park', style: GoogleFonts.poppins(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _estimateFare(); // trigger fake fare
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

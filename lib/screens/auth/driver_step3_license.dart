@@ -47,7 +47,6 @@ class DriverStep3License extends StatefulWidget {
 
 class _DriverStep3LicenseState extends State<DriverStep3License> {
   final _licenseCtrl = TextEditingController();
-  final _aadharCtrl  = TextEditingController();
   final _cityCtrl    = TextEditingController();
   final _stateCtrl   = TextEditingController();
 
@@ -105,8 +104,6 @@ class _DriverStep3LicenseState extends State<DriverStep3License> {
       'year'           : widget.regYear,
       'license_number' : _licenseCtrl.text.trim().toUpperCase(),
       'license_expiry' : expiry,
-      'aadhar_number'  : _aadharCtrl.text.trim().isEmpty
-                            ? null : _aadharCtrl.text.trim(),
       'city'           : _cityCtrl.text.trim(),
       'state'          : _stateCtrl.text.trim().isEmpty
                             ? 'Delhi' : _stateCtrl.text.trim(),
@@ -135,7 +132,6 @@ class _DriverStep3LicenseState extends State<DriverStep3License> {
   @override
   void dispose() {
     _licenseCtrl.dispose();
-    _aadharCtrl.dispose();
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     super.dispose();
@@ -225,17 +221,6 @@ class _DriverStep3LicenseState extends State<DriverStep3License> {
                         color: AppColors.textSecondary),
                     ]),
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Aadhar ────────────────────────────
-                _label('Aadhaar Number (Optional)'),
-                _textField(
-                  _aadharCtrl,
-                  '12-digit Aadhaar number',
-                  Icons.fingerprint_rounded,
-                  type: TextInputType.number,
-                  maxLen: 12,
                 ),
                 const SizedBox(height: 16),
 

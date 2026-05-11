@@ -79,7 +79,12 @@ class _OtpScreenState extends State<OtpScreen> {
     final phone = _phoneController.text.trim();
 
     try {
-      if (_userExists) {
+      // ⚠️ FORCE REGISTRATION FLOW FOR TESTING ⚠️
+      // Currently, if you use a phone number already in the database, 
+      // the app skips registration. We are forcing it here so you can test the UI.
+      bool forceRegistrationScreens = true; 
+
+      if (_userExists && !forceRegistrationScreens) {
         // Existing user → login
         final res = await http.post(
           Uri.parse('${AppConstants.baseUrl}/auth/otp/login'),
@@ -93,7 +98,7 @@ class _OtpScreenState extends State<OtpScreen> {
           setState(() => _error = data['detail'] ?? 'Invalid OTP');
         }
       } else {
-        // New user → go to registration screen
+        // New user (or Forced) → go to registration screen
         if (widget.role == 'rider') {
           Navigator.pushReplacement(context, MaterialPageRoute(
             builder: (_) => RiderRegisterScreen(phone: phone, otp: otp),
