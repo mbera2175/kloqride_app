@@ -7,6 +7,9 @@ import 'screens/rider/rider_home_screen.dart';
 import 'screens/driver/driver_home_screen.dart';
 import 'screens/auth/role_selection_screen.dart';
 
+// Global navigator key for force logout
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService.init(); // ← load saved session
@@ -25,6 +28,7 @@ class KloqRideApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'KloqRide',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
