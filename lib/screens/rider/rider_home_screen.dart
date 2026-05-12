@@ -387,7 +387,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               mainAxisSpacing: 20,
               childAspectRatio: 1.0,
               children: AppConstants.services.map((s) =>
-                _serviceItemCard(s['icon'], s['label'])
+                _serviceItemCard(s['type'], s['icon'], s['label'])
               ).toList(),
             ),
           ),
@@ -861,21 +861,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     final selected = _selectedVehicle == type;
     return GestureDetector(
       onTap: () {
-        setState(() { _selectedVehicle = type; _fareData = null; });
+        setState(() { 
+          _selectedVehicle = type; 
+          _serviceType = ''; // Deselect service if vehicle selected
+          _fareData = null; 
+        });
         _openSearchPage();
       },
       child: Container(
         decoration: BoxDecoration(
           color: selected ? AppColors.primary.withOpacity(0.08) : AppColors.white,
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.divider,
+            color: selected ? AppColors.primary : AppColors.divider, 
             width: selected ? 2 : 1.5),
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow.withOpacity(0.5),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
+            if (selected)
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2)
+              )
           ],
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -890,21 +896,40 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     );
   }
 
-  Widget _serviceItemCard(IconData iconData, String label) {
+  Widget _serviceItemCard(String type, IconData iconData, String label) {
+    final selected = _serviceType == type;
     return GestureDetector(
-      onTap: _openSearchPage,
+      onTap: () {
+        setState(() { 
+          _serviceType = type; 
+          _selectedVehicle = ''; // Deselect vehicle if service selected
+          _fareData = null; 
+        });
+        _openSearchPage();
+      },
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: selected ? AppColors.primary.withOpacity(0.08) : AppColors.white,
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider, 
+            width: selected ? 2 : 1.5),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider, width: 1.5),
+          boxShadow: [
+            if (selected)
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2)
+              )
+          ],
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(iconData, size: 30, color: AppColors.primary),
+          Icon(iconData, size: 30, 
+            color: selected ? AppColors.primary : AppColors.textSecondary),
           const SizedBox(height: 6),
           Text(label, style: GoogleFonts.poppins(
             fontSize: 11, fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary)),
+            color: selected ? AppColors.primary : AppColors.textPrimary)),
         ]),
       ),
     );

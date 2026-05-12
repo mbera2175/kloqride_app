@@ -82,14 +82,14 @@ class _OtpScreenState extends State<OtpScreen> {
       // ⚠️ FORCE REGISTRATION FLOW FOR TESTING ⚠️
       // Currently, if you use a phone number already in the database, 
       // the app skips registration. We are forcing it here so you can test the UI.
-      bool forceRegistrationScreens = true; 
+      bool forceRegistrationScreens = false; 
 
       if (_userExists && !forceRegistrationScreens) {
         // Existing user → login
         final res = await http.post(
           Uri.parse('${AppConstants.baseUrl}/auth/otp/login'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'phone': phone, 'otp': otp}),
+          body: jsonEncode({'phone': phone, 'otp': otp, 'role': widget.role}),
         );
         final data = jsonDecode(res.body);
         if (res.statusCode == 200) {
@@ -117,11 +117,15 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   void _handleLoginSuccess(Map data) async {
-    await AuthService.saveSession(Map<String, dynamic>.from(data));
+    // Override role with what the user selected — prevents auto-switching
+    // when the same phone number is registered as both Rider and Driver
+    final sessionData = Map<String, dynamic>.from(data);
+    sessionData['role'] = widget.role;
+    await AuthService.saveSession(sessionData);
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context,
       MaterialPageRoute(builder: (_) =>
-        data['role'] == 'rider'
+        widget.role == 'rider'
           ? const RiderHomeScreen()
           : const DriverHomeScreen()),
       (r) => false);
