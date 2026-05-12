@@ -1,5 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 import '../utils/constants.dart';
+import '../main.dart';
+import '../screens/auth/role_selection_screen.dart';
 
 class AuthService {
   static SharedPreferences? _prefs;
@@ -44,7 +47,13 @@ class AuthService {
   }
 
   // ── Logout ──────────────────────────────────────────────
-  static Future<void> logout() async {
+  static Future<void> logout({bool forced = false}) async {
     await _prefs?.clear();
+    if (forced) {
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
+        (route) => false,
+      );
+    }
   }
 }
