@@ -22,6 +22,18 @@ class ApiService {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return {'success': true, 'data': data, 'status': res.statusCode};
     }
+    if (res.statusCode == 403) {
+      final detail = data is Map ? data['detail'] : '';
+      if (detail != null && detail.toString().contains('another device')) {
+        await AuthService.logout();
+        return {
+          'success': false,
+          'error': 'You have been logged out because your account was accessed from another device.',
+          'status': 403,
+          'force_logout': true
+        };
+      }
+    }
     String error = 'Something went wrong';
     if (data is Map) {
       if (data['detail'] is String)      error = data['detail'];
