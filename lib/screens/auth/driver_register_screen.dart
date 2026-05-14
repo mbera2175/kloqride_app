@@ -54,14 +54,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
         title: Text('Driver Registration',
           style: GoogleFonts.poppins(
             fontSize: 17, fontWeight: FontWeight.w600)),
-        actions: [
-          TextButton(
-            onPressed: _next,
-            child: Text('Skip',
-              style: GoogleFonts.poppins(
-                color: AppColors.textSecondary, fontSize: 14)),
-          ),
-        ],
+        // No skip — this page is not skippable
       ),
       body: Column(children: [
         _stepBar(1),
@@ -75,7 +68,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
                 children: [
                   _stepTitle('Personal Information', Icons.person_rounded),
                   const SizedBox(height: 4),
-                  Text('Step 1 of 4',
+                  Text('Step 1 of 3',
                     style: GoogleFonts.poppins(
                       fontSize: 12, color: AppColors.textSecondary)),
                   const SizedBox(height: 24),
@@ -165,7 +158,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Column(children: [
-        Row(children: List.generate(4, (i) => Expanded(
+        Row(children: List.generate(3, (i) => Expanded(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
             height: 4,
@@ -180,8 +173,7 @@ class _DriverRegisterScreenState extends State<DriverRegisterScreen> {
           children: [
           _stepLabel('Personal', 1, current),
           _stepLabel('Vehicle',  2, current),
-          _stepLabel('License',  3, current),
-          _stepLabel('Docs',     4, current),
+          _stepLabel('Docs',     3, current),
         ]),
       ]),
     );
