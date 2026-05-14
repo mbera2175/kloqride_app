@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../utils/app_colors.dart';
-import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 import '../driver/driver_home_screen.dart';
 
 class DriverStep4Documents extends StatefulWidget {
@@ -17,19 +17,24 @@ class DriverStep4Documents extends StatefulWidget {
 class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
   final ImagePicker _picker = ImagePicker();
 
-  // Document storage — each has front & back where needed
+  // ── Document storage — each has front & back where needed ──
   final Map<String, Map<String, File?>> _docs = {
     'rc'       : {'front': null, 'back': null},
     'dl'       : {'front': null, 'back': null},
-    'aadhar'   : {'front': null, 'back': null},
-    'insurance': {'front': null, 'back': null},
-    'permit'   : {'front': null, 'back': null},
+    'aadhaar'  : {'front': null, 'back': null},
+    'insurance': {'front': null},
+    'permit'   : {'front': null},
   };
 
-  bool _uploading = false;
-  Map<String, bool> _uploaded = {};
+  // Tracks which individual slots have been successfully uploaded
+  Map<String, bool> _uploadedSlots = {};
 
-  // Doc config — label, icon, needs back side
+  bool   _uploading        = false;
+  String _uploadingLabel   = '';
+  int    _uploadedCount    = 0;
+  int    _totalSlots       = 9; // 3×2 + 1 + 1 + profile_pic handled separately
+
+  // ── Doc config ─────────────────────────────────────────────
   final List<Map<String, dynamic>> _docConfig = [
     {
       'key'     : 'rc',
@@ -39,6 +44,8 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       'hasBack' : true,
       'required': true,
       'hint'    : 'Upload both sides of your RC book',
+      'frontKey': 'rc_front',
+      'backKey' : 'rc_back',
     },
     {
       'key'     : 'dl',
@@ -48,15 +55,19 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       'hasBack' : true,
       'required': true,
       'hint'    : 'Upload front and back of your DL',
+      'frontKey': 'dl_front',
+      'backKey' : 'dl_back',
     },
     {
-      'key'     : 'aadhar',
+      'key'     : 'aadhaar',
       'label'   : 'Aadhaar Card',
       'icon'    : Icons.fingerprint_rounded,
       'color'   : AppColors.success,
       'hasBack' : true,
       'required': true,
       'hint'    : 'Upload both sides of your Aadhaar',
+      'frontKey': 'aadhaar_front',
+      'backKey' : 'aadhaar_back',
     },
     {
       'key'     : 'insurance',
@@ -66,6 +77,7 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       'hasBack' : false,
       'required': true,
       'hint'    : 'Upload your vehicle insurance document',
+      'frontKey': 'insurance',
     },
     {
       'key'     : 'permit',
@@ -75,19 +87,19 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       'hasBack' : false,
       'required': false,
       'hint'    : 'Upload permit if applicable (optional)',
+      'frontKey': 'permit',
     },
   ];
 
-  // ── Pick image ─────────────────────────────────────────
-
+  // ── Pick image ──────────────────────────────────────────────
   Future<void> _pickImage(String docKey, String side) async {
     final source = await _showSourceDialog();
     if (source == null) return;
 
     final picked = await _picker.pickImage(
-      source     : source,
+      source      : source,
       imageQuality: 80,
-      maxWidth   : 1200,
+      maxWidth    : 1200,
     );
     if (picked == null) return;
 
@@ -111,16 +123,12 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             const SizedBox(height: 16),
             Row(children: [
               Expanded(child: _sourceBtn(
-                Icons.camera_alt_rounded,
-                'Camera',
-                AppColors.primary,
+                Icons.camera_alt_rounded, 'Camera', AppColors.primary,
                 () => Navigator.pop(context, ImageSource.camera),
               )),
               const SizedBox(width: 12),
               Expanded(child: _sourceBtn(
-                Icons.photo_library_rounded,
-                'Gallery',
-                AppColors.driverColor,
+                Icons.photo_library_rounded, 'Gallery', AppColors.driverColor,
                 () => Navigator.pop(context, ImageSource.gallery),
               )),
             ]),
@@ -143,37 +151,98 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 6),
           Text(label, style: GoogleFonts.poppins(
-            fontSize: 13, fontWeight: FontWeight.w600,
-            color: color)),
+            fontSize: 13, fontWeight: FontWeight.w600, color: color)),
         ]),
       ),
     );
-
-  // ── Remove image ───────────────────────────────────────
 
   void _removeImage(String docKey, String side) {
     setState(() => _docs[docKey]![side] = null);
   }
 
-  // ── Submit docs ────────────────────────────────────────
-
-  // NOTE: In production, upload images to Firebase Storage / S3
-  // and send the URLs to backend. For now we simulate upload.
+  // ── Submit — uploads each doc one by one to backend ────────
   Future<void> _submitDocs() async {
-    setState(() => _uploading = true);
+    setState(() {
+      _uploading     = true;
+      _uploadedCount = 0;
+    });
 
-    // Simulate upload delay
-    await Future.delayed(const Duration(seconds: 2));
+    final List<Map<String, dynamic>> toUpload = [];
+
+    // Build list of all selected files with their doc_type keys
+    for (final doc in _docConfig) {
+      final key      = doc['key'] as String;
+      final frontKey = doc['frontKey'] as String;
+      final frontFile = _docs[key]!['front'];
+      final backFile  = _docs[key]!['back'];
+
+      if (frontFile != null) {
+        toUpload.add({'file': frontFile, 'docType': frontKey});
+      }
+      if (doc['hasBack'] == true && backFile != null) {
+        toUpload.add({'file': backFile, 'docType': doc['backKey'] as String});
+      }
+    }
+
+    if (toUpload.isEmpty) {
+      // Nothing selected — skip directly
+      setState(() => _uploading = false);
+      _showSuccessDialog(skipped: true);
+      return;
+    }
+
+    setState(() => _totalSlots = toUpload.length);
+
+    final List<String> failed = [];
+
+    for (final item in toUpload) {
+      final docType = item['docType'] as String;
+      setState(() => _uploadingLabel = _labelFor(docType));
+
+      final result = await ApiService.uploadDocument(
+        driverId: widget.driverId,
+        docType : docType,
+        file    : item['file'] as File,
+      );
+
+      if (result['success'] == true) {
+        setState(() {
+          _uploadedSlots[docType] = true;
+          _uploadedCount++;
+        });
+      } else {
+        failed.add(docType);
+      }
+    }
 
     setState(() => _uploading = false);
 
-    if (!mounted) return;
-    _showSuccessDialog();
+    if (failed.isNotEmpty) {
+      _showPartialErrorDialog(failed);
+    } else {
+      _showSuccessDialog();
+    }
   }
 
-  void _skip() => _showSuccessDialog();
+  // Human-readable label for progress text
+  String _labelFor(String docType) {
+    const map = {
+      'dl_front'     : 'DL Front',
+      'dl_back'      : 'DL Back',
+      'rc_front'     : 'RC Front',
+      'rc_back'      : 'RC Back',
+      'aadhaar_front': 'Aadhaar Front',
+      'aadhaar_back' : 'Aadhaar Back',
+      'insurance'    : 'Insurance',
+      'permit'       : 'Permit',
+    };
+    return map[docType] ?? docType;
+  }
 
-  void _showSuccessDialog() {
+  void _skip() => _showSuccessDialog(skipped: true);
+
+  // ── Success dialog ──────────────────────────────────────────
+  void _showSuccessDialog({bool skipped = false}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -197,26 +266,28 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
               color: AppColors.textPrimary)),
           const SizedBox(height: 10),
           Text(
-            'Your account is under review.\n'
-            'We\'ll verify your documents and notify you '
-            'within 24 hours once approved.',
+            skipped
+              ? 'Your account is under review.\n'
+                'Upload your documents later from\nSettings → My Documents.'
+              : 'Documents uploaded successfully! ✅\n'
+                'Your account is under review.\n'
+                'We\'ll notify you within 24 hours.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: 13, color: AppColors.textSecondary,
-              height: 1.5)),
+              fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10)),
-            child: Text(
-              '📋 You can also upload documents later\n'
-              'from Settings → My Documents',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 12, color: AppColors.warning,
-                fontWeight: FontWeight.w500))),
+          if (skipped)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10)),
+              child: Text(
+                '📋 You can upload documents later\nfrom Settings → My Documents',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppColors.warning,
+                  fontWeight: FontWeight.w500))),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -245,24 +316,76 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Check completion ───────────────────────────────────
-
-  int get _uploadedCount {
-    int count = 0;
-    for (final doc in _docs.values) {
-      if (doc['front'] != null) count++;
-    }
-    return count;
+  // ── Partial error dialog ────────────────────────────────────
+  void _showPartialErrorDialog(List<String> failed) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20)),
+        title: Text('Some uploads failed',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+          Text('These documents could not be uploaded:',
+            style: GoogleFonts.poppins(fontSize: 13)),
+          const SizedBox(height: 8),
+          ...failed.map((f) => Text('• ${_labelFor(f)}',
+            style: GoogleFonts.poppins(
+              fontSize: 13, color: AppColors.error))),
+          const SizedBox(height: 12),
+          Text('You can retry from Settings → My Documents.',
+            style: GoogleFonts.poppins(
+              fontSize: 12, color: AppColors.textSecondary)),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushAndRemoveUntil(context,
+                MaterialPageRoute(
+                  builder: (_) => const DriverHomeScreen()),
+                (r) => false);
+            },
+            child: Text('Continue Anyway',
+              style: GoogleFonts.poppins(color: AppColors.driverColor)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _submitDocs(); // retry
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.driverColor),
+            child: Text('Retry',
+              style: GoogleFonts.poppins(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
+  // ── Completion checks ───────────────────────────────────────
   bool get _hasRequiredDocs {
-    final required = ['rc', 'dl', 'aadhar', 'insurance'];
+    final required = ['rc', 'dl', 'aadhaar', 'insurance'];
     for (final key in required) {
       if (_docs[key]!['front'] == null) return false;
     }
     return true;
   }
 
+  int get _selectedCount {
+    int count = 0;
+    for (final doc in _docs.values) {
+      for (final f in doc.values) {
+        if (f != null) count++;
+      }
+    }
+    return count;
+  }
+
+  // ── Build ───────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -278,7 +401,7 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             fontSize: 17, fontWeight: FontWeight.w600)),
         actions: [
           TextButton(
-            onPressed: _skip,
+            onPressed: _uploading ? null : _skip,
             child: Text('Skip',
               style: GoogleFonts.poppins(
                 color: AppColors.textSecondary, fontSize: 14)),
@@ -288,7 +411,6 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       body: Column(children: [
         _stepBar(4),
 
-        // Progress indicator
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
           child: Row(
@@ -297,12 +419,41 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             Text('Step 4 of 4 — Document Upload',
               style: GoogleFonts.poppins(
                 fontSize: 12, color: AppColors.textSecondary)),
-            Text('$_uploadedCount/5 uploaded',
+            Text('$_selectedCount selected',
               style: GoogleFonts.poppins(
                 fontSize: 12, fontWeight: FontWeight.w600,
                 color: AppColors.driverColor)),
           ]),
         ),
+
+        // Upload progress bar
+        if (_uploading)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                Text('Uploading $_uploadingLabel...',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12, color: AppColors.driverColor,
+                    fontWeight: FontWeight.w600)),
+                Text('$_uploadedCount / $_totalSlots',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12, color: AppColors.textSecondary)),
+              ]),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(
+                value: _totalSlots > 0
+                    ? _uploadedCount / _totalSlots : 0,
+                backgroundColor: AppColors.divider,
+                color: AppColors.driverColor,
+                minHeight: 6,
+              ),
+            ]),
+          ),
 
         Expanded(
           child: SingleChildScrollView(
@@ -328,8 +479,7 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                       'Upload clear photos of your documents. '
                       'Blurry or incomplete documents will delay approval.',
                       style: GoogleFonts.poppins(
-                        fontSize: 12, color: AppColors.info,
-                        height: 1.5))),
+                        fontSize: 12, color: AppColors.info, height: 1.5))),
                   ]),
                 ),
 
@@ -361,29 +511,26 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                             child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2.5)),
                           const SizedBox(width: 12),
-                          Text('Uploading...',
+                          Text('Uploading $_uploadedCount/$_totalSlots...',
                             style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
+                              fontSize: 15, fontWeight: FontWeight.w600)),
                         ])
                       : Text(
                           _hasRequiredDocs
                             ? 'Submit Documents ✅'
                             : 'Upload Required Documents First',
                           style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600)),
+                            fontSize: 15, fontWeight: FontWeight.w600)),
                   ),
                 ),
 
                 const SizedBox(height: 12),
 
                 Center(child: TextButton(
-                  onPressed: _skip,
+                  onPressed: _uploading ? null : _skip,
                   child: Text('Skip — upload later from Settings',
                     style: GoogleFonts.poppins(
-                      color: AppColors.textSecondary,
-                      fontSize: 13)),
+                      color: AppColors.textSecondary, fontSize: 13)),
                 )),
 
                 const SizedBox(height: 30),
@@ -395,19 +542,18 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Document Card ──────────────────────────────────────
-
+  // ── Document Card ───────────────────────────────────────────
   Widget _docCard(Map<String, dynamic> doc) {
-    final key      = doc['key'] as String;
-    final label    = doc['label'] as String;
-    final icon     = doc['icon'] as IconData;
-    final color    = doc['color'] as Color;
-    final hasBack  = doc['hasBack'] as bool;
+    final key      = doc['key']      as String;
+    final label    = doc['label']    as String;
+    final icon     = doc['icon']     as IconData;
+    final color    = doc['color']    as Color;
+    final hasBack  = doc['hasBack']  as bool;
     final required = doc['required'] as bool;
-    final hint     = doc['hint'] as String;
+    final hint     = doc['hint']     as String;
 
-    final frontFile = _docs[key]!['front'];
-    final backFile  = _docs[key]!['back'];
+    final frontFile  = _docs[key]!['front'];
+    final backFile   = _docs[key]!['back'];
     final isComplete = frontFile != null && (!hasBack || backFile != null);
 
     return Container(
@@ -425,7 +571,6 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
           blurRadius: 6, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
-        // Header
         Padding(
           padding: const EdgeInsets.all(14),
           child: Row(children: [
@@ -479,7 +624,6 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
 
         const Divider(height: 1),
 
-        // Upload slots
         Padding(
           padding: const EdgeInsets.all(14),
           child: hasBack
@@ -498,20 +642,13 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Upload Slot ────────────────────────────────────────
-
+  // ── Upload Slot ─────────────────────────────────────────────
   Widget _uploadSlot(
-    String docKey,
-    String side,
-    String label,
-    Color color,
-    File? file, {
-    bool fullWidth = false,
-  }) {
+    String docKey, String side, String label,
+    Color color, File? file, {bool fullWidth = false}) {
     return GestureDetector(
-      onTap: file == null
-          ? () => _pickImage(docKey, side)
-          : null,
+      onTap: (_uploading || file != null) ? null
+          : () => _pickImage(docKey, side),
       child: Container(
         height: 100,
         width: fullWidth ? double.infinity : null,
@@ -524,23 +661,17 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             color: file != null
                 ? AppColors.success.withOpacity(0.4)
                 : color.withOpacity(0.3),
-            width: 1.5,
-            style: BorderStyle.solid)),
+            width: 1.5)),
         child: file != null
           ? Stack(children: [
-              // Image preview
               ClipRRect(
                 borderRadius: BorderRadius.circular(11),
-                child: Image.file(
-                  file,
-                  width: double.infinity,
-                  height: double.infinity,
+                child: Image.file(file,
+                  width: double.infinity, height: double.infinity,
                   fit: BoxFit.cover)),
-              // Overlay buttons
               Positioned(
                 top: 4, right: 4,
                 child: Row(children: [
-                  // Retake
                   GestureDetector(
                     onTap: () => _pickImage(docKey, side),
                     child: Container(
@@ -551,7 +682,6 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                       child: const Icon(Icons.camera_alt_rounded,
                         color: Colors.white, size: 14))),
                   const SizedBox(width: 4),
-                  // Remove
                   GestureDetector(
                     onTap: () => _removeImage(docKey, side),
                     child: Container(
@@ -563,7 +693,6 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                         color: Colors.white, size: 14))),
                 ]),
               ),
-              // Label
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: Container(
@@ -597,8 +726,7 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Step Bar ───────────────────────────────────────────
-
+  // ── Step Bar ────────────────────────────────────────────────
   Widget _stepBar(int current) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
     child: Column(children: [
