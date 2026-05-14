@@ -123,6 +123,35 @@ class ApiService {
     }
   }
 
+  /// Save text document details (RC number, DL number, Aadhaar number, years).
+  static Future<Map<String, dynamic>> saveDocumentDetails({
+    required int    driverId,
+    String?         rcNumber,
+    int?            rcRegYear,
+    int?            rcExpireYear,
+    String?         dlNumber,
+    int?            dlExpireYear,
+    String?         aadhaarNumber,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/documents/details/$driverId'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          if (rcNumber      != null) 'rc_number'        : rcNumber,
+          if (rcRegYear     != null) 'registration_year': rcRegYear,
+          if (rcExpireYear  != null) 'rc_expiry_year'   : rcExpireYear,
+          if (dlNumber      != null) 'dl_number'        : dlNumber,
+          if (dlExpireYear  != null) 'dl_expiry_year'   : dlExpireYear,
+          if (aadhaarNumber != null) 'aadhaar_number'   : aadhaarNumber,
+        }),
+      );
+      return _handle(res);
+    } catch (e) {
+      return {'success': false, 'error': 'Failed to save details: $e'};
+    }
+  }
+
   /// Get all uploaded document URLs for a driver.
   static Future<Map<String, dynamic>> getDocuments(int driverId) async {
     final res = await http.get(
