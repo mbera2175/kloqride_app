@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../utils/app_colors.dart';
@@ -17,99 +18,41 @@ class DriverStep4Documents extends StatefulWidget {
 class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
   final ImagePicker _picker = ImagePicker();
 
-  // ── Document storage — each has front & back where needed ──
-  final Map<String, Map<String, File?>> _docs = {
-    'rc'       : {'front': null, 'back': null},
-    'dl'       : {'front': null, 'back': null},
-    'aadhaar'  : {'front': null, 'back': null},
-    'insurance': {'front': null},
-    'permit'   : {'front': null},
-  };
+  // ── Profile picture ────────────────────────────────────
+  File? _profilePic;
 
-  // Tracks which individual slots have been successfully uploaded
-  Map<String, bool> _uploadedSlots = {};
+  // ── RC Details ─────────────────────────────────────────
+  final _rcNumberCtrl = TextEditingController();
+  int   _rcRegYear    = DateTime.now().year;
+  int   _rcExpireYear = DateTime.now().year + 1;
+  File? _rcFront;
+  File? _rcBack;
 
-  bool   _uploading        = false;
-  String _uploadingLabel   = '';
-  int    _uploadedCount    = 0;
-  int    _totalSlots       = 9; // 3×2 + 1 + 1 + profile_pic handled separately
+  // ── DL Details ─────────────────────────────────────────
+  final _dlNumberCtrl = TextEditingController();
+  int   _dlExpireYear = DateTime.now().year + 1;
+  File? _dlFront;
+  File? _dlBack;
 
-  // ── Doc config ─────────────────────────────────────────────
-  final List<Map<String, dynamic>> _docConfig = [
-    {
-      'key'     : 'rc',
-      'label'   : 'RC (Registration Certificate)',
-      'icon'    : Icons.directions_car_rounded,
-      'color'   : AppColors.primary,
-      'hasBack' : true,
-      'required': true,
-      'hint'    : 'Upload both sides of your RC book',
-      'frontKey': 'rc_front',
-      'backKey' : 'rc_back',
-    },
-    {
-      'key'     : 'dl',
-      'label'   : 'Driving Licence (DL)',
-      'icon'    : Icons.badge_rounded,
-      'color'   : AppColors.driverColor,
-      'hasBack' : true,
-      'required': true,
-      'hint'    : 'Upload front and back of your DL',
-      'frontKey': 'dl_front',
-      'backKey' : 'dl_back',
-    },
-    {
-      'key'     : 'aadhaar',
-      'label'   : 'Aadhaar Card',
-      'icon'    : Icons.fingerprint_rounded,
-      'color'   : AppColors.success,
-      'hasBack' : true,
-      'required': true,
-      'hint'    : 'Upload both sides of your Aadhaar',
-      'frontKey': 'aadhaar_front',
-      'backKey' : 'aadhaar_back',
-    },
-    {
-      'key'     : 'insurance',
-      'label'   : 'Insurance Certificate',
-      'icon'    : Icons.security_rounded,
-      'color'   : AppColors.warning,
-      'hasBack' : false,
-      'required': true,
-      'hint'    : 'Upload your vehicle insurance document',
-      'frontKey': 'insurance',
-    },
-    {
-      'key'     : 'permit',
-      'label'   : 'Vehicle Permit',
-      'icon'    : Icons.article_rounded,
-      'color'   : AppColors.info,
-      'hasBack' : false,
-      'required': false,
-      'hint'    : 'Upload permit if applicable (optional)',
-      'frontKey': 'permit',
-    },
-  ];
+  // ── Aadhaar Details ────────────────────────────────────
+  final _aadhaarCtrl = TextEditingController();
+  File? _aadhaarFront;
+  File? _aadhaarBack;
 
-  // ── Pick image ──────────────────────────────────────────────
-  Future<void> _pickImage(String docKey, String side) async {
-    final source = await _showSourceDialog();
-    if (source == null) return;
+  // ── Insurance & Permit ─────────────────────────────────
+  File? _insurance;
+  File? _permit;
 
-    final picked = await _picker.pickImage(
-      source      : source,
-      imageQuality: 80,
-      maxWidth    : 1200,
-    );
-    if (picked == null) return;
+  // ── Upload state ───────────────────────────────────────
+  bool   _uploading      = false;
+  String _uploadingLabel = '';
+  int    _uploadedCount  = 0;
+  int    _totalSlots     = 0;
+  String _error          = '';
 
-    setState(() {
-      _docs[docKey]![side] = File(picked.path);
-    });
-  }
-
-  Future<ImageSource?> _showSourceDialog() async {
-    return showModalBottomSheet<ImageSource>(
+  // ── Pick image helper ──────────────────────────────────
+  Future<File?> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -124,18 +67,21 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             Row(children: [
               Expanded(child: _sourceBtn(
                 Icons.camera_alt_rounded, 'Camera', AppColors.primary,
-                () => Navigator.pop(context, ImageSource.camera),
-              )),
+                () => Navigator.pop(context, ImageSource.camera))),
               const SizedBox(width: 12),
               Expanded(child: _sourceBtn(
                 Icons.photo_library_rounded, 'Gallery', AppColors.driverColor,
-                () => Navigator.pop(context, ImageSource.gallery),
-              )),
+                () => Navigator.pop(context, ImageSource.gallery))),
             ]),
           ]),
         ),
       ),
     );
+    if (source == null) return null;
+    final picked = await _picker.pickImage(
+      source: source, imageQuality: 80, maxWidth: 1200);
+    if (picked == null) return null;
+    return File(picked.path);
   }
 
   Widget _sourceBtn(IconData icon, String label, Color color, VoidCallback onTap) =>
@@ -156,63 +102,75 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
       ),
     );
 
-  void _removeImage(String docKey, String side) {
-    setState(() => _docs[docKey]![side] = null);
+  // ── Upload single file ─────────────────────────────────
+  Future<bool> _uploadFile(File file, String docType) async {
+    setState(() => _uploadingLabel = _labelFor(docType));
+    final result = await ApiService.uploadDocument(
+      driverId: widget.driverId,
+      docType:  docType,
+      file:     file,
+    );
+    if (result['success'] == true) {
+      setState(() => _uploadedCount++);
+      return true;
+    }
+    return false;
   }
 
-  // ── Submit — uploads each doc one by one to backend ────────
+  // ── Save text details to backend ───────────────────────
+  Future<void> _saveDocDetails() async {
+    await ApiService.saveDocumentDetails(
+      driverId:         widget.driverId,
+      rcNumber:         _rcNumberCtrl.text.trim().isEmpty ? null : _rcNumberCtrl.text.trim().toUpperCase(),
+      rcRegYear:        _rcRegYear,
+      rcExpireYear:     _rcExpireYear,
+      dlNumber:         _dlNumberCtrl.text.trim().isEmpty ? null : _dlNumberCtrl.text.trim().toUpperCase(),
+      dlExpireYear:     _dlExpireYear,
+      aadhaarNumber:    _aadhaarCtrl.text.trim().isEmpty ? null : _aadhaarCtrl.text.trim(),
+    );
+  }
+
+  // ── Validate required sections ─────────────────────────
+  String? _validate() {
+    if (_profilePic == null) return 'Profile picture is required';
+    if (_rcFront == null || _rcBack == null) return 'RC front and back photos are required';
+    if (_dlFront == null || _dlBack == null) return 'DL front and back photos are required';
+    if (_aadhaarFront == null || _aadhaarBack == null) return 'Aadhaar front and back photos are required';
+    if (_insurance == null) return 'Insurance certificate is required';
+    return null;
+  }
+
+  // ── Submit all docs ────────────────────────────────────
   Future<void> _submitDocs() async {
-    setState(() {
-      _uploading     = true;
-      _uploadedCount = 0;
-    });
-
-    final List<Map<String, dynamic>> toUpload = [];
-
-    // Build list of all selected files with their doc_type keys
-    for (final doc in _docConfig) {
-      final key      = doc['key'] as String;
-      final frontKey = doc['frontKey'] as String;
-      final frontFile = _docs[key]!['front'];
-      final backFile  = _docs[key]!['back'];
-
-      if (frontFile != null) {
-        toUpload.add({'file': frontFile, 'docType': frontKey});
-      }
-      if (doc['hasBack'] == true && backFile != null) {
-        toUpload.add({'file': backFile, 'docType': doc['backKey'] as String});
-      }
-    }
-
-    if (toUpload.isEmpty) {
-      // Nothing selected — skip directly
-      setState(() => _uploading = false);
-      _showSuccessDialog(skipped: true);
+    final err = _validate();
+    if (err != null) {
+      setState(() => _error = err);
       return;
     }
+    setState(() { _error = ''; _uploading = true; _uploadedCount = 0; });
 
-    setState(() => _totalSlots = toUpload.length);
+    // Count total slots
+    final slots = <Map<String, dynamic>>[
+      {'file': _profilePic!,  'type': 'profile_pic'},
+      {'file': _rcFront!,     'type': 'rc_front'},
+      {'file': _rcBack!,      'type': 'rc_back'},
+      {'file': _dlFront!,     'type': 'dl_front'},
+      {'file': _dlBack!,      'type': 'dl_back'},
+      {'file': _aadhaarFront!,'type': 'aadhaar_front'},
+      {'file': _aadhaarBack!, 'type': 'aadhaar_back'},
+      {'file': _insurance!,   'type': 'insurance'},
+      if (_permit != null) {'file': _permit!, 'type': 'permit'},
+    ];
+    setState(() => _totalSlots = slots.length);
 
+    // Save text details first
+    await _saveDocDetails();
+
+    // Upload images
     final List<String> failed = [];
-
-    for (final item in toUpload) {
-      final docType = item['docType'] as String;
-      setState(() => _uploadingLabel = _labelFor(docType));
-
-      final result = await ApiService.uploadDocument(
-        driverId: widget.driverId,
-        docType : docType,
-        file    : item['file'] as File,
-      );
-
-      if (result['success'] == true) {
-        setState(() {
-          _uploadedSlots[docType] = true;
-          _uploadedCount++;
-        });
-      } else {
-        failed.add(docType);
-      }
+    for (final slot in slots) {
+      final ok = await _uploadFile(slot['file'] as File, slot['type'] as String);
+      if (!ok) failed.add(slot['type'] as String);
     }
 
     setState(() => _uploading = false);
@@ -224,31 +182,32 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     }
   }
 
-  // Human-readable label for progress text
-  String _labelFor(String docType) {
-    const map = {
-      'dl_front'     : 'DL Front',
-      'dl_back'      : 'DL Back',
-      'rc_front'     : 'RC Front',
-      'rc_back'      : 'RC Back',
-      'aadhaar_front': 'Aadhaar Front',
-      'aadhaar_back' : 'Aadhaar Back',
-      'insurance'    : 'Insurance',
-      'permit'       : 'Permit',
-    };
-    return map[docType] ?? docType;
+  // ── Skip (go to home, upload later from My Documents) ──
+  void _skip() {
+    _showSuccessDialog(skipped: true);
   }
 
-  void _skip() => _showSuccessDialog(skipped: true);
+  String _labelFor(String t) {
+    const m = {
+      'profile_pic':   'Profile Picture',
+      'rc_front':      'RC Front',
+      'rc_back':       'RC Back',
+      'dl_front':      'DL Front',
+      'dl_back':       'DL Back',
+      'aadhaar_front': 'Aadhaar Front',
+      'aadhaar_back':  'Aadhaar Back',
+      'insurance':     'Insurance',
+      'permit':        'Permit',
+    };
+    return m[t] ?? t;
+  }
 
-  // ── Success dialog ──────────────────────────────────────────
   void _showSuccessDialog({bool skipped = false}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),
           Container(
@@ -267,35 +226,32 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
           const SizedBox(height: 10),
           Text(
             skipped
-              ? 'Your account is under review.\n'
-                'Upload your documents later from\nSettings → My Documents.'
-              : 'Documents uploaded successfully! ✅\n'
-                'Your account is under review.\n'
-                'We\'ll notify you within 24 hours.',
+              ? 'Your account is under review.\nUpload your documents later from\nProfile → My Documents.'
+              : 'Documents uploaded! ✅\nYour account is under review.\nWe\'ll notify you within 24 hours.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
-          const SizedBox(height: 8),
-          if (skipped)
+          if (skipped) ...[
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.warning.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10)),
               child: Text(
-                '📋 You can upload documents later\nfrom Settings → My Documents',
+                '📋 Upload documents later from\nProfile → My Documents',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 12, color: AppColors.warning,
                   fontWeight: FontWeight.w500))),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pushAndRemoveUntil(context,
-                  MaterialPageRoute(
-                    builder: (_) => const DriverHomeScreen()),
+                  MaterialPageRoute(builder: (_) => const DriverHomeScreen()),
                   (r) => false);
               },
               style: ElevatedButton.styleFrom(
@@ -306,8 +262,7 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                 padding: const EdgeInsets.symmetric(vertical: 14)),
               child: Text('Go to Dashboard',
                 style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white, fontWeight: FontWeight.w600,
                   fontSize: 15)),
             ),
           ),
@@ -316,26 +271,24 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Partial error dialog ────────────────────────────────────
   void _showPartialErrorDialog(List<String> failed) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Some uploads failed',
           style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
         content: Column(mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Text('These documents could not be uploaded:',
+          Text('These could not be uploaded:',
             style: GoogleFonts.poppins(fontSize: 13)),
           const SizedBox(height: 8),
           ...failed.map((f) => Text('• ${_labelFor(f)}',
             style: GoogleFonts.poppins(
               fontSize: 13, color: AppColors.error))),
           const SizedBox(height: 12),
-          Text('You can retry from Settings → My Documents.',
+          Text('Retry from Profile → My Documents.',
             style: GoogleFonts.poppins(
               fontSize: 12, color: AppColors.textSecondary)),
         ]),
@@ -344,48 +297,23 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             onPressed: () {
               Navigator.pop(context);
               Navigator.pushAndRemoveUntil(context,
-                MaterialPageRoute(
-                  builder: (_) => const DriverHomeScreen()),
+                MaterialPageRoute(builder: (_) => const DriverHomeScreen()),
                 (r) => false);
             },
-            child: Text('Continue Anyway',
-              style: GoogleFonts.poppins(color: AppColors.driverColor)),
-          ),
+            child: Text('Continue',
+              style: GoogleFonts.poppins(color: AppColors.driverColor))),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _submitDocs(); // retry
-            },
+            onPressed: () { Navigator.pop(context); _submitDocs(); },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.driverColor),
             child: Text('Retry',
-              style: GoogleFonts.poppins(color: Colors.white)),
-          ),
+              style: GoogleFonts.poppins(color: Colors.white))),
         ],
       ),
     );
   }
 
-  // ── Completion checks ───────────────────────────────────────
-  bool get _hasRequiredDocs {
-    final required = ['rc', 'dl', 'aadhaar', 'insurance'];
-    for (final key in required) {
-      if (_docs[key]!['front'] == null) return false;
-    }
-    return true;
-  }
-
-  int get _selectedCount {
-    int count = 0;
-    for (final doc in _docs.values) {
-      for (final f in doc.values) {
-        if (f != null) count++;
-      }
-    }
-    return count;
-  }
-
-  // ── Build ───────────────────────────────────────────────────
+  // ── BUILD ──────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -395,11 +323,12 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_rounded),
-          onPressed: () => Navigator.pop(context)),
+          onPressed: _uploading ? null : () => Navigator.pop(context)),
         title: Text('Upload Documents',
           style: GoogleFonts.poppins(
             fontSize: 17, fontWeight: FontWeight.w600)),
         actions: [
+          // Only this page is skippable
           TextButton(
             onPressed: _uploading ? null : _skip,
             child: Text('Skip',
@@ -409,27 +338,12 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
         ],
       ),
       body: Column(children: [
-        _stepBar(4),
+        _stepBar(3),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-            Text('Step 4 of 4 — Document Upload',
-              style: GoogleFonts.poppins(
-                fontSize: 12, color: AppColors.textSecondary)),
-            Text('$_selectedCount selected',
-              style: GoogleFonts.poppins(
-                fontSize: 12, fontWeight: FontWeight.w600,
-                color: AppColors.driverColor)),
-          ]),
-        ),
-
-        // Upload progress bar
+        // Upload progress
         if (_uploading)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -446,12 +360,9 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
               ]),
               const SizedBox(height: 6),
               LinearProgressIndicator(
-                value: _totalSlots > 0
-                    ? _uploadedCount / _totalSlots : 0,
+                value: _totalSlots > 0 ? _uploadedCount / _totalSlots : 0,
                 backgroundColor: AppColors.divider,
-                color: AppColors.driverColor,
-                minHeight: 6,
-              ),
+                color: AppColors.driverColor, minHeight: 6),
             ]),
           ),
 
@@ -461,44 +372,290 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Info banner
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.info.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.info.withOpacity(0.3))),
-                  child: Row(
+
+                _sectionHeader('Step 3 of 3 — Documents', Icons.folder_rounded),
+                const SizedBox(height: 4),
+                Text('Upload your documents clearly. Permit is optional.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 20),
+
+                // ══════════════════════════════════════
+                // 1. PROFILE PICTURE
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.person_rounded,
+                  color: AppColors.driverColor,
+                  title: 'Profile Picture',
+                  badge: 'Required',
+                  badgeColor: AppColors.error,
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    const Icon(Icons.info_outline_rounded,
-                      color: AppColors.info, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(
-                      'Upload clear photos of your documents. '
-                      'Blurry or incomplete documents will delay approval.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12, color: AppColors.info, height: 1.5))),
+                    // Rules banner
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.warning.withOpacity(0.4))),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                        const Icon(Icons.warning_amber_rounded,
+                          color: AppColors.warning, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(
+                          'Photo rules: No helmet • No sunglasses • No cap\n'
+                          'Clear face photo in good lighting',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11, color: AppColors.warning,
+                            fontWeight: FontWeight.w500, height: 1.4))),
+                      ]),
+                    ),
+                    const SizedBox(height: 12),
+                    _fullWidthUploadSlot(
+                      file: _profilePic,
+                      label: 'Upload Profile Photo',
+                      color: AppColors.driverColor,
+                      height: 160,
+                      onPick: () async {
+                        final f = await _pickImage();
+                        if (f != null) setState(() => _profilePic = f);
+                      },
+                      onRemove: () => setState(() => _profilePic = null),
+                    ),
                   ]),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // Document cards
-                ..._docConfig.map((doc) => _docCard(doc)),
+                // ══════════════════════════════════════
+                // 2. RC DETAILS
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.directions_car_rounded,
+                  color: AppColors.primary,
+                  title: 'RC (Registration Certificate)',
+                  badge: 'Required',
+                  badgeColor: AppColors.error,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    _label('RC Number'),
+                    _textField(_rcNumberCtrl, 'e.g. WB01AB1234',
+                      Icons.pin_outlined,
+                      capitalization: TextCapitalization.characters),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                        _label('Registration Year'),
+                        _yearDropdown(
+                          value: _rcRegYear,
+                          from: DateTime.now().year - 20,
+                          to: DateTime.now().year,
+                          onChanged: (v) => setState(() => _rcRegYear = v!),
+                          color: AppColors.primary),
+                      ])),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                        _label('Expire Year'),
+                        _yearDropdown(
+                          value: _rcExpireYear,
+                          from: DateTime.now().year,
+                          to: DateTime.now().year + 15,
+                          onChanged: (v) => setState(() => _rcExpireYear = v!),
+                          color: AppColors.primary),
+                      ])),
+                    ]),
+                    const SizedBox(height: 12),
+                    _label('Front & Back Photos'),
+                    Row(children: [
+                      Expanded(child: _uploadSlot(
+                        file: _rcFront, label: 'Front Side',
+                        color: AppColors.primary,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _rcFront = f);
+                        },
+                        onRemove: () => setState(() => _rcFront = null))),
+                      const SizedBox(width: 12),
+                      Expanded(child: _uploadSlot(
+                        file: _rcBack, label: 'Back Side',
+                        color: AppColors.primary,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _rcBack = f);
+                        },
+                        onRemove: () => setState(() => _rcBack = null))),
+                    ]),
+                  ]),
+                ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // Submit button
+                // ══════════════════════════════════════
+                // 3. DL DETAILS
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.badge_rounded,
+                  color: AppColors.driverColor,
+                  title: 'Driving Licence (DL)',
+                  badge: 'Required',
+                  badgeColor: AppColors.error,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    _label('DL Number'),
+                    _textField(_dlNumberCtrl, 'e.g. WB0120110012345',
+                      Icons.credit_card_rounded,
+                      capitalization: TextCapitalization.characters),
+                    const SizedBox(height: 12),
+                    _label('Expire Year'),
+                    _yearDropdown(
+                      value: _dlExpireYear,
+                      from: DateTime.now().year,
+                      to: DateTime.now().year + 20,
+                      onChanged: (v) => setState(() => _dlExpireYear = v!),
+                      color: AppColors.driverColor),
+                    const SizedBox(height: 12),
+                    _label('Front & Back Photos'),
+                    Row(children: [
+                      Expanded(child: _uploadSlot(
+                        file: _dlFront, label: 'Front Side',
+                        color: AppColors.driverColor,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _dlFront = f);
+                        },
+                        onRemove: () => setState(() => _dlFront = null))),
+                      const SizedBox(width: 12),
+                      Expanded(child: _uploadSlot(
+                        file: _dlBack, label: 'Back Side',
+                        color: AppColors.driverColor,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _dlBack = f);
+                        },
+                        onRemove: () => setState(() => _dlBack = null))),
+                    ]),
+                  ]),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ══════════════════════════════════════
+                // 4. AADHAAR
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.fingerprint_rounded,
+                  color: AppColors.success,
+                  title: 'Aadhaar Card',
+                  badge: 'Required',
+                  badgeColor: AppColors.error,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    _label('Aadhaar Number'),
+                    _textField(_aadhaarCtrl, 'e.g. 1234 5678 9012',
+                      Icons.numbers_rounded,
+                      type: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(12),
+                      ]),
+                    const SizedBox(height: 12),
+                    _label('Front & Back Photos'),
+                    Row(children: [
+                      Expanded(child: _uploadSlot(
+                        file: _aadhaarFront, label: 'Front Side',
+                        color: AppColors.success,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _aadhaarFront = f);
+                        },
+                        onRemove: () => setState(() => _aadhaarFront = null))),
+                      const SizedBox(width: 12),
+                      Expanded(child: _uploadSlot(
+                        file: _aadhaarBack, label: 'Back Side',
+                        color: AppColors.success,
+                        onPick: () async {
+                          final f = await _pickImage();
+                          if (f != null) setState(() => _aadhaarBack = f);
+                        },
+                        onRemove: () => setState(() => _aadhaarBack = null))),
+                    ]),
+                  ]),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ══════════════════════════════════════
+                // 5. INSURANCE
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.security_rounded,
+                  color: AppColors.warning,
+                  title: 'Insurance Certificate',
+                  badge: 'Required',
+                  badgeColor: AppColors.error,
+                  child: _fullWidthUploadSlot(
+                    file: _insurance,
+                    label: 'Upload Insurance Certificate',
+                    color: AppColors.warning,
+                    height: 100,
+                    onPick: () async {
+                      final f = await _pickImage();
+                      if (f != null) setState(() => _insurance = f);
+                    },
+                    onRemove: () => setState(() => _insurance = null),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ══════════════════════════════════════
+                // 6. VEHICLE PERMIT (optional)
+                // ══════════════════════════════════════
+                _sectionCard(
+                  icon: Icons.article_rounded,
+                  color: AppColors.info,
+                  title: 'Vehicle Permit',
+                  badge: 'Optional',
+                  badgeColor: AppColors.textSecondary,
+                  child: _fullWidthUploadSlot(
+                    file: _permit,
+                    label: 'Upload Permit (if applicable)',
+                    color: AppColors.info,
+                    height: 100,
+                    onPick: () async {
+                      final f = await _pickImage();
+                      if (f != null) setState(() => _permit = f);
+                    },
+                    onRemove: () => setState(() => _permit = null),
+                  ),
+                ),
+
+                // ── Error ──────────────────────────────
+                if (_error.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _errorBox(_error),
+                ],
+
+                const SizedBox(height: 32),
+
+                // ── Submit button ──────────────────────
                 SizedBox(
                   width: double.infinity, height: 54,
                   child: ElevatedButton(
                     onPressed: _uploading ? null : _submitDocs,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _hasRequiredDocs
-                          ? AppColors.driverColor
-                          : AppColors.textSecondary,
+                      backgroundColor: AppColors.driverColor,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -511,14 +668,11 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
                             child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2.5)),
                           const SizedBox(width: 12),
-                          Text('Uploading $_uploadedCount/$_totalSlots...',
+                          Text('Uploading $_uploadedCount / $_totalSlots...',
                             style: GoogleFonts.poppins(
                               fontSize: 15, fontWeight: FontWeight.w600)),
                         ])
-                      : Text(
-                          _hasRequiredDocs
-                            ? 'Submit Documents ✅'
-                            : 'Upload Required Documents First',
+                      : Text('Submit Documents ✅',
                           style: GoogleFonts.poppins(
                             fontSize: 15, fontWeight: FontWeight.w600)),
                   ),
@@ -528,7 +682,8 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
 
                 Center(child: TextButton(
                   onPressed: _uploading ? null : _skip,
-                  child: Text('Skip — upload later from Settings',
+                  child: Text('Skip — upload later from Profile → My Documents',
+                    textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       color: AppColors.textSecondary, fontSize: 13)),
                 )),
@@ -542,201 +697,222 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
     );
   }
 
-  // ── Document Card ───────────────────────────────────────────
-  Widget _docCard(Map<String, dynamic> doc) {
-    final key      = doc['key']      as String;
-    final label    = doc['label']    as String;
-    final icon     = doc['icon']     as IconData;
-    final color    = doc['color']    as Color;
-    final hasBack  = doc['hasBack']  as bool;
-    final required = doc['required'] as bool;
-    final hint     = doc['hint']     as String;
+  // ── Section header ─────────────────────────────────────
+  Widget _sectionHeader(String title, IconData icon) => Row(children: [
+    Icon(icon, color: AppColors.driverColor, size: 22),
+    const SizedBox(width: 8),
+    Text(title, style: GoogleFonts.poppins(
+      fontSize: 18, fontWeight: FontWeight.w700,
+      color: AppColors.textPrimary)),
+  ]);
 
-    final frontFile  = _docs[key]!['front'];
-    final backFile   = _docs[key]!['back'];
-    final isComplete = frontFile != null && (!hasBack || backFile != null);
+  // ── Section card wrapper ───────────────────────────────
+  Widget _sectionCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String badge,
+    required Color badgeColor,
+    required Widget child,
+  }) => Container(
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.divider, width: 1.5),
+      boxShadow: [BoxShadow(
+        color: AppColors.shadow,
+        blurRadius: 6, offset: const Offset(0, 2))],
+    ),
+    child: Column(children: [
+      // Card header
+      Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 20)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(title, style: GoogleFonts.poppins(
+            fontSize: 13, fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6)),
+            child: Text(badge, style: GoogleFonts.poppins(
+              fontSize: 10, fontWeight: FontWeight.w700,
+              color: badgeColor))),
+        ]),
+      ),
+      const Divider(height: 1),
+      Padding(
+        padding: const EdgeInsets.all(14),
+        child: child,
+      ),
+    ]),
+  );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+  // ── Two-column upload slot ─────────────────────────────
+  Widget _uploadSlot({
+    required File? file,
+    required String label,
+    required Color color,
+    required VoidCallback onPick,
+    required VoidCallback onRemove,
+  }) => GestureDetector(
+    onTap: (_uploading || file != null) ? null : onPick,
+    child: Container(
+      height: 100,
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: file != null ? Colors.transparent : color.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isComplete
-              ? AppColors.success.withOpacity(0.5)
-              : AppColors.divider,
-          width: isComplete ? 2 : 1.5),
-        boxShadow: [BoxShadow(
-          color: AppColors.shadow,
-          blurRadius: 6, offset: const Offset(0, 2))],
-      ),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Row(children: [
-                Expanded(child: Text(label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13, fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary))),
-                if (required)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6)),
-                    child: Text('Required',
-                      style: GoogleFonts.poppins(
-                        fontSize: 9, fontWeight: FontWeight.w700,
-                        color: AppColors.error)))
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.textHint.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(6)),
-                    child: Text('Optional',
-                      style: GoogleFonts.poppins(
-                        fontSize: 9, fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary))),
-              ]),
-              const SizedBox(height: 2),
-              Text(hint, style: GoogleFonts.poppins(
-                fontSize: 11, color: AppColors.textSecondary)),
-            ])),
-            if (isComplete)
-              const Icon(Icons.check_circle_rounded,
-                color: AppColors.success, size: 22),
-          ]),
-        ),
-
-        const Divider(height: 1),
-
-        Padding(
-          padding: const EdgeInsets.all(14),
-          child: hasBack
-            ? Row(children: [
-                Expanded(child: _uploadSlot(
-                  key, 'front', 'Front Side', color, frontFile)),
-                const SizedBox(width: 12),
-                Expanded(child: _uploadSlot(
-                  key, 'back', 'Back Side', color, backFile)),
-              ])
-            : _uploadSlot(
-                key, 'front', 'Upload Document', color, frontFile,
-                fullWidth: true),
-        ),
-      ]),
-    );
-  }
-
-  // ── Upload Slot ─────────────────────────────────────────────
-  Widget _uploadSlot(
-    String docKey, String side, String label,
-    Color color, File? file, {bool fullWidth = false}) {
-    return GestureDetector(
-      onTap: (_uploading || file != null) ? null
-          : () => _pickImage(docKey, side),
-      child: Container(
-        height: 100,
-        width: fullWidth ? double.infinity : null,
-        decoration: BoxDecoration(
           color: file != null
-              ? Colors.transparent
-              : color.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: file != null
-                ? AppColors.success.withOpacity(0.4)
-                : color.withOpacity(0.3),
-            width: 1.5)),
-        child: file != null
-          ? Stack(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(11),
-                child: Image.file(file,
-                  width: double.infinity, height: double.infinity,
-                  fit: BoxFit.cover)),
-              Positioned(
-                top: 4, right: 4,
-                child: Row(children: [
-                  GestureDetector(
-                    onTap: () => _pickImage(docKey, side),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.camera_alt_rounded,
-                        color: Colors.white, size: 14))),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () => _removeImage(docKey, side),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.close_rounded,
-                        color: Colors.white, size: 14))),
-                ]),
-              ),
-              Positioned(
-                bottom: 0, left: 0, right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(11))),
-                  child: Text(label,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 10, color: Colors.white,
-                      fontWeight: FontWeight.w600)))),
-            ])
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-              Icon(Icons.cloud_upload_rounded,
-                color: color.withOpacity(0.6), size: 28),
-              const SizedBox(height: 6),
-              Text(label, textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 11, fontWeight: FontWeight.w600,
-                  color: color.withOpacity(0.8))),
-              const SizedBox(height: 2),
-              Text('Tap to upload',
-                style: GoogleFonts.poppins(
-                  fontSize: 10, color: AppColors.textHint)),
-            ]),
-      ),
-    );
-  }
+              ? AppColors.success.withOpacity(0.4)
+              : color.withOpacity(0.3),
+          width: 1.5)),
+      child: file != null
+        ? Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: Image.file(file,
+                width: double.infinity, height: double.infinity,
+                fit: BoxFit.cover)),
+            Positioned(top: 4, right: 4,
+              child: Row(children: [
+                GestureDetector(
+                  onTap: onPick,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.camera_alt_rounded,
+                      color: Colors.white, size: 14))),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 14))),
+              ])),
+            Positioned(bottom: 0, left: 0, right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: const BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(11))),
+                child: Text(label,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10, color: Colors.white,
+                    fontWeight: FontWeight.w600)))),
+          ])
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+            Icon(Icons.cloud_upload_rounded,
+              color: color.withOpacity(0.6), size: 26),
+            const SizedBox(height: 4),
+            Text(label, textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: color.withOpacity(0.8))),
+            Text('Tap to upload',
+              style: GoogleFonts.poppins(
+                fontSize: 10, color: AppColors.textHint)),
+          ]),
+    ),
+  );
 
-  // ── Step Bar ────────────────────────────────────────────────
+  // ── Full-width upload slot ─────────────────────────────
+  Widget _fullWidthUploadSlot({
+    required File? file,
+    required String label,
+    required Color color,
+    required double height,
+    required VoidCallback onPick,
+    required VoidCallback onRemove,
+  }) => GestureDetector(
+    onTap: (_uploading || file != null) ? null : onPick,
+    child: Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: file != null ? Colors.transparent : color.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: file != null
+              ? AppColors.success.withOpacity(0.4)
+              : color.withOpacity(0.3),
+          width: 1.5)),
+      child: file != null
+        ? Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: Image.file(file,
+                width: double.infinity, height: double.infinity,
+                fit: BoxFit.cover)),
+            Positioned(top: 4, right: 4,
+              child: Row(children: [
+                GestureDetector(
+                  onTap: onPick,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.camera_alt_rounded,
+                      color: Colors.white, size: 16))),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 16))),
+              ])),
+          ])
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+            Icon(Icons.cloud_upload_rounded,
+              color: color.withOpacity(0.6), size: 30),
+            const SizedBox(height: 6),
+            Text(label,
+              style: GoogleFonts.poppins(
+                fontSize: 12, fontWeight: FontWeight.w600,
+                color: color.withOpacity(0.8))),
+            const SizedBox(height: 2),
+            Text('Tap to upload',
+              style: GoogleFonts.poppins(
+                fontSize: 11, color: AppColors.textHint)),
+          ]),
+    ),
+  );
+
+  // ── Step bar ───────────────────────────────────────────
   Widget _stepBar(int current) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
     child: Column(children: [
-      Row(children: List.generate(4, (i) => Expanded(
+      Row(children: List.generate(3, (i) => Expanded(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 2),
           height: 4,
           decoration: BoxDecoration(
-            color: i < current
-                ? AppColors.driverColor : AppColors.divider,
+            color: i < current ? AppColors.driverColor : AppColors.divider,
             borderRadius: BorderRadius.circular(2)))))),
       const SizedBox(height: 8),
       Row(
@@ -744,16 +920,92 @@ class _DriverStep4DocumentsState extends State<DriverStep4Documents> {
         children: [
         _stepLabel('Personal', 1, current),
         _stepLabel('Vehicle',  2, current),
-        _stepLabel('License',  3, current),
-        _stepLabel('Docs',     4, current),
+        _stepLabel('Docs',     3, current),
       ]),
     ]));
 
   Widget _stepLabel(String label, int step, int current) =>
     Text(label, style: GoogleFonts.poppins(
       fontSize: 10,
-      fontWeight: step <= current
-          ? FontWeight.w700 : FontWeight.w400,
-      color: step <= current
-          ? AppColors.driverColor : AppColors.textHint));
+      fontWeight: step <= current ? FontWeight.w700 : FontWeight.w400,
+      color: step <= current ? AppColors.driverColor : AppColors.textHint));
+
+  Widget _label(String t) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(t, style: GoogleFonts.poppins(
+      fontSize: 12, fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary)));
+
+  Widget _textField(
+    TextEditingController ctrl,
+    String hint,
+    IconData icon, {
+    TextCapitalization capitalization = TextCapitalization.none,
+    TextInputType type = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+  }) => TextField(
+    controller: ctrl,
+    keyboardType: type,
+    textCapitalization: capitalization,
+    inputFormatters: inputFormatters,
+    enabled: !_uploading,
+    style: GoogleFonts.poppins(fontSize: 14),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.poppins(color: AppColors.textHint, fontSize: 13),
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 18),
+      counterText: '',
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.driverColor, width: 2)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)));
+
+  Widget _yearDropdown({
+    required int value,
+    required int from,
+    required int to,
+    required void Function(int?) onChanged,
+    required Color color,
+  }) {
+    final years = List.generate(to - from + 1, (i) => from + i).reversed.toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.divider, width: 1.5),
+        borderRadius: BorderRadius.circular(10)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: value, isExpanded: true,
+          style: GoogleFonts.poppins(
+            fontSize: 13, color: AppColors.textPrimary),
+          items: years.map((y) => DropdownMenuItem(
+            value: y, child: Text('$y'))).toList(),
+          onChanged: _uploading ? null : onChanged)));
+  }
+
+  Widget _errorBox(String msg) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.error.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(10)),
+    child: Row(children: [
+      const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+      const SizedBox(width: 8),
+      Expanded(child: Text(msg, style: GoogleFonts.poppins(
+        fontSize: 13, color: AppColors.error))),
+    ]));
+
+  @override
+  void dispose() {
+    _rcNumberCtrl.dispose();
+    _dlNumberCtrl.dispose();
+    _aadhaarCtrl.dispose();
+    super.dispose();
+  }
 }
