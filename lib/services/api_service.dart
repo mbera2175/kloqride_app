@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 import '../utils/constants.dart';
 import 'auth_service.dart';
 
@@ -82,6 +83,52 @@ class ApiService {
   static Future<Map<String, dynamic>> getMe() async {
     final res = await http.get(Uri.parse('$_base/auth/me'),
       headers: _authHeaders);
+    return _handle(res);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  DOCUMENTS
+  // ═══════════════════════════════════════════════════════
+
+  /// Upload a single document image to Cloudinary via backend.
+  /// [driverId] — the driver's ID returned after registration
+  /// [docType]  — one of: dl_front, dl_back, rc_front, rc_back,
+  ///              aadhaar_front, aadhaar_back, insurance, permit, profile_pic
+  /// [file]     — the image File picked from camera or gallery
+  static Future<Map<String, dynamic>> uploadDocument({
+    required int    driverId,
+    required String docType,
+    required File   file,
+  }) async {
+    try {
+      final uri = Uri.parse('$_base/documents/upload/$driverId/$docType');
+      final request = http.MultipartRequest('POST', uri);
+
+      // Auth header
+      request.headers['Authorization'] = 'Bearer ${AuthService.token}';
+
+      // Attach file
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        filename: '$docType.jpg',
+      ));
+
+      final streamed = await request.send();
+      final res      = await http.Response.fromStream(streamed);
+      return _handle(res);
+
+    } catch (e) {
+      return {'success': false, 'error': 'Upload failed: $e'};
+    }
+  }
+
+  /// Get all uploaded document URLs for a driver.
+  static Future<Map<String, dynamic>> getDocuments(int driverId) async {
+    final res = await http.get(
+      Uri.parse('$_base/documents/$driverId'),
+      headers: _authHeaders,
+    );
     return _handle(res);
   }
 
