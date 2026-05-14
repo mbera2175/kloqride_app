@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../utils/app_colors.dart';
-import 'driver_step3_license.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import 'driver_step4_documents.dart';
 
 class DriverStep2Vehicle extends StatefulWidget {
   final String  phone;
@@ -28,89 +30,80 @@ class DriverStep2Vehicle extends StatefulWidget {
 }
 
 class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
-  final _plateCtrl = TextEditingController();
   final _brandCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
+  final _cityCtrl  = TextEditingController();
+  final _stateCtrl = TextEditingController();
 
-  String _vehicleType  = 'auto';
+  String _vehicleType      = 'auto';
   List<String> _selectedServices = ['ride'];
-  int    _regYear      = DateTime.now().year;
-  int    _expireYear   = DateTime.now().year + 1;
-  String _error        = '';
+  bool   _loading          = false;
+  String _error            = '';
 
   final List<Map<String, dynamic>> _vehicles = [
-    {'type': 'bike',      'icon': Icons.two_wheeler_rounded,      'label': 'Bike'},
-    {'type': 'auto',      'icon': Icons.local_taxi_rounded,       'label': 'Auto'},
-    {'type': 'toto',      'icon': Icons.electric_rickshaw_rounded,'label': 'Toto'},
-    {'type': 'mini',      'icon': Icons.directions_car_rounded,   'label': 'Mini'},
-    {'type': 'sedan',     'icon': Icons.time_to_leave_rounded,    'label': 'Sedan'},
-    {'type': 'suv',       'icon': Icons.airport_shuttle_rounded,  'label': 'SUV'},
-    {'type': 'ambulance', 'icon': Icons.medical_services_rounded, 'label': 'Ambulance'},
+    {'type': 'bike',      'icon': Icons.two_wheeler_rounded,       'label': 'Bike'},
+    {'type': 'auto',      'icon': Icons.local_taxi_rounded,        'label': 'Auto'},
+    {'type': 'toto',      'icon': Icons.electric_rickshaw_rounded, 'label': 'Toto'},
+    {'type': 'mini',      'icon': Icons.directions_car_rounded,    'label': 'Mini'},
+    {'type': 'sedan',     'icon': Icons.time_to_leave_rounded,     'label': 'Sedan'},
+    {'type': 'suv',       'icon': Icons.airport_shuttle_rounded,   'label': 'SUV'},
+    {'type': 'ambulance', 'icon': Icons.medical_services_rounded,  'label': 'Ambulance'},
   ];
 
-  void _next() {
-    if (_plateCtrl.text.trim().isEmpty ||
-        _brandCtrl.text.trim().isEmpty ||
+  // ── Validate + submit to backend ──────────────────────
+  Future<void> _submitAndNext() async {
+    if (_brandCtrl.text.trim().isEmpty ||
         _modelCtrl.text.trim().isEmpty ||
         _colorCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Please fill all vehicle details');
+      setState(() => _error = 'Please fill vehicle brand, model and color');
       return;
     }
-    if (_expireYear <= _regYear) {
-      setState(() => _error = 'Expiry year must be after registration year');
+    if (_cityCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'City is required');
       return;
     }
-    setState(() => _error = '');
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => DriverStep3License(
-        phone       : widget.phone,
-        otp         : widget.otp,
-        fullName    : widget.fullName,
-        email       : widget.email,
-        gender      : widget.gender,
-        language    : widget.language,
-        referral    : widget.referral,
-        vehicleType : _vehicleType,
-        serviceType : _selectedServices.join(','),
-        plateNumber : _plateCtrl.text.trim().toUpperCase(),
-        brand       : _brandCtrl.text.trim(),
-        model       : _modelCtrl.text.trim(),
-        color       : _colorCtrl.text.trim(),
-        regYear     : _regYear,
-        expireYear  : _expireYear,
-      ),
-    ));
-  }
+    setState(() { _loading = true; _error = ''; });
 
-  void _skip() {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => DriverStep3License(
-        phone      : widget.phone,
-        otp        : widget.otp,
-        fullName   : widget.fullName,
-        email      : widget.email,
-        gender     : widget.gender,
-        language   : widget.language,
-        referral   : widget.referral,
-        vehicleType: _vehicleType,
-        serviceType: _selectedServices.join(','),
-        plateNumber: '',
-        brand      : '',
-        model      : '',
-        color      : '',
-        regYear    : _regYear,
-        expireYear : _expireYear,
-      ),
-    ));
+    final res = await ApiService.registerDriver({
+      'phone'        : widget.phone,
+      'otp'          : widget.otp,
+      'full_name'    : widget.fullName,
+      'email'        : widget.email,
+      'gender'       : widget.gender,
+      'language'     : widget.language,
+      'referral_code': widget.referral,
+      'vehicle_type' : _vehicleType,
+      'service_type' : _selectedServices.join(','),
+      'brand'        : _brandCtrl.text.trim(),
+      'model'        : _modelCtrl.text.trim(),
+      'color'        : _colorCtrl.text.trim(),
+      'city'         : _cityCtrl.text.trim(),
+      'state'        : _stateCtrl.text.trim().isEmpty
+                          ? 'West Bengal' : _stateCtrl.text.trim(),
+    });
+
+    setState(() => _loading = false);
+
+    if (res['success']) {
+      await AuthService.saveSession(res['data']);
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => DriverStep4Documents(
+          driverId: res['data']['driver_id'] ?? 0,
+        )));
+    } else {
+      setState(() => _error = res['error'] ?? 'Registration failed');
+    }
   }
 
   @override
   void dispose() {
-    _plateCtrl.dispose();
     _brandCtrl.dispose();
     _modelCtrl.dispose();
     _colorCtrl.dispose();
+    _cityCtrl.dispose();
+    _stateCtrl.dispose();
     super.dispose();
   }
 
@@ -123,18 +116,11 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_rounded),
-          onPressed: () => Navigator.pop(context)),
+          onPressed: _loading ? null : () => Navigator.pop(context)),
         title: Text('Vehicle Details',
           style: GoogleFonts.poppins(
             fontSize: 17, fontWeight: FontWeight.w600)),
-        actions: [
-          TextButton(
-            onPressed: _skip,
-            child: Text('Skip',
-              style: GoogleFonts.poppins(
-                color: AppColors.textSecondary, fontSize: 14)),
-          ),
-        ],
+        // No skip — this page is not skippable
       ),
       body: Column(children: [
         _stepBar(2),
@@ -146,7 +132,7 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
               children: [
                 _stepTitle('Vehicle Details', Icons.directions_car_rounded),
                 const SizedBox(height: 4),
-                Text('Step 2 of 4',
+                Text('Step 2 of 3',
                   style: GoogleFonts.poppins(
                     fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 24),
@@ -212,32 +198,42 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
 
                 const SizedBox(height: 16),
 
-                // ── Plate Number ──────────────────────
-                _label('Registration / Plate Number *'),
-                _textField(_plateCtrl, 'e.g. WB01AB1234',
-                    Icons.pin_outlined,
-                    capitalization: TextCapitalization.characters),
+                // ── City ──────────────────────────────
+                _label('City *'),
+                _textField(_cityCtrl, 'e.g. Kolkata, Delhi, Mumbai',
+                    Icons.location_city_rounded,
+                    capitalization: TextCapitalization.words),
 
                 const SizedBox(height: 16),
 
-                // ── Registration Year ─────────────────
-                _label('Registration Year *'),
-                _yearDropdown(
-                  value  : _regYear,
-                  from   : DateTime.now().year - 20,
-                  to     : DateTime.now().year,
-                  onChanged: (v) => setState(() => _regYear = v!),
-                ),
+                // ── State ─────────────────────────────
+                _label('State (Optional)'),
+                _textField(_stateCtrl, 'e.g. West Bengal, Delhi',
+                    Icons.map_outlined,
+                    capitalization: TextCapitalization.words),
 
+                // ── Info banner ───────────────────────
                 const SizedBox(height: 16),
-
-                // ── Expiry Year ───────────────────────
-                _label('Registration Expiry Year *'),
-                _yearDropdown(
-                  value  : _expireYear,
-                  from   : DateTime.now().year,
-                  to     : DateTime.now().year + 15,
-                  onChanged: (v) => setState(() => _expireYear = v!),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.info.withOpacity(0.3))),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    const Icon(Icons.info_outline_rounded,
+                      color: AppColors.info, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      'Your account will be reviewed within 24 hours '
+                      'after document upload. You\'ll be notified once approved.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12, color: AppColors.info,
+                        height: 1.5))),
+                  ]),
                 ),
 
                 // ── Error ─────────────────────────────
@@ -248,16 +244,27 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
 
                 const SizedBox(height: 32),
 
-                _nextBtn('Continue to License Details →', _next),
-
-                const SizedBox(height: 12),
-
-                Center(child: TextButton(
-                  onPressed: _skip,
-                  child: Text('Skip this step',
-                    style: GoogleFonts.poppins(
-                      color: AppColors.textSecondary, fontSize: 13)),
-                )),
+                // ── Submit button ──────────────────────
+                SizedBox(
+                  width: double.infinity, height: 54,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _submitAndNext,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.driverColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                      elevation: 0),
+                    child: _loading
+                      ? const SizedBox(
+                          width: 22, height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5))
+                      : Text('Save & Upload Documents →',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                  ),
+                ),
 
                 const SizedBox(height: 20),
               ],
@@ -273,10 +280,10 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
   Widget _vehicleCard(String type, IconData iconData, String label) {
     final selected = _vehicleType == type;
     return GestureDetector(
-      onTap: () {
+      onTap: _loading ? null : () {
         setState(() {
           _vehicleType = type;
-          _selectedServices = ['ride']; // Reset on vehicle change
+          _selectedServices = ['ride'];
         });
       },
       child: Container(
@@ -291,31 +298,27 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(iconData, size: 26, color: selected ? AppColors.driverColor : AppColors.textPrimary),
+            Icon(iconData, size: 26,
+              color: selected ? AppColors.driverColor : AppColors.textPrimary),
             const SizedBox(height: 4),
             Text(label, style: GoogleFonts.poppins(
               fontSize: 11, fontWeight: FontWeight.w600,
-              color: selected
-                  ? AppColors.driverColor
-                  : AppColors.textPrimary)),
+              color: selected ? AppColors.driverColor : AppColors.textPrimary)),
           ]),
       ),
     );
   }
 
-  Widget _serviceCard(
-      String type, IconData iconData, String title, String sub) {
+  Widget _serviceCard(String type, IconData iconData, String title, String sub) {
     final selected = _selectedServices.contains(type);
     return GestureDetector(
-      onTap: () {
+      onTap: _loading ? null : () {
         setState(() {
           if (selected) {
-            if (_selectedServices.length > 1) { // Prevent deselecting if it's the only one
-              _selectedServices.remove(type);
-            }
+            if (_selectedServices.length > 1) _selectedServices.remove(type);
           } else {
             if (_vehicleType != 'bike' && _vehicleType != 'toto') {
-              _selectedServices = ['ride']; // Enforce only ride for cars
+              _selectedServices = ['ride'];
             } else {
               _selectedServices.add(type);
             }
@@ -333,7 +336,8 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
             width: selected ? 2 : 1.5),
           borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
-          Icon(iconData, size: 24, color: selected ? AppColors.driverColor : AppColors.textSecondary),
+          Icon(iconData, size: 24,
+            color: selected ? AppColors.driverColor : AppColors.textSecondary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -342,9 +346,7 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
               children: [
                 Text(title, style: GoogleFonts.poppins(
                   fontSize: 12, fontWeight: FontWeight.w600,
-                  color: selected
-                      ? AppColors.driverColor
-                      : AppColors.textPrimary)),
+                  color: selected ? AppColors.driverColor : AppColors.textPrimary)),
                 Text(sub, style: GoogleFonts.poppins(
                   fontSize: 10, color: AppColors.textSecondary)),
             ]),
@@ -354,39 +356,15 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
     );
   }
 
-  Widget _yearDropdown({
-    required int value,
-    required int from,
-    required int to,
-    required void Function(int?) onChanged,
-  }) {
-    final years = List.generate(to - from + 1, (i) => from + i).reversed.toList();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.divider, width: 1.5),
-        borderRadius: BorderRadius.circular(12)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: value, isExpanded: true,
-          style: GoogleFonts.poppins(
-            fontSize: 14, color: AppColors.textPrimary),
-          items: years.map((y) => DropdownMenuItem(
-            value: y, child: Text('$y'))).toList(),
-          onChanged: onChanged)));
-  }
-
   Widget _stepBar(int current) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
     child: Column(children: [
-      Row(children: List.generate(4, (i) => Expanded(
+      Row(children: List.generate(3, (i) => Expanded(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 2),
           height: 4,
           decoration: BoxDecoration(
-            color: i < current
-                ? AppColors.driverColor
-                : AppColors.divider,
+            color: i < current ? AppColors.driverColor : AppColors.divider,
             borderRadius: BorderRadius.circular(2)))))),
       const SizedBox(height: 8),
       Row(
@@ -394,18 +372,15 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
         children: [
         _stepLabel('Personal', 1, current),
         _stepLabel('Vehicle',  2, current),
-        _stepLabel('License',  3, current),
-        _stepLabel('Docs',     4, current),
+        _stepLabel('Docs',     3, current),
       ]),
     ]));
 
   Widget _stepLabel(String label, int step, int current) => Text(label,
     style: GoogleFonts.poppins(
       fontSize: 10,
-      fontWeight: step <= current
-          ? FontWeight.w700 : FontWeight.w400,
-      color: step <= current
-          ? AppColors.driverColor : AppColors.textHint));
+      fontWeight: step <= current ? FontWeight.w700 : FontWeight.w400,
+      color: step <= current ? AppColors.driverColor : AppColors.textHint));
 
   Widget _stepTitle(String title, IconData icon) => Row(children: [
     Icon(icon, color: AppColors.driverColor, size: 22),
@@ -426,31 +401,26 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
     IconData icon, {
     TextCapitalization capitalization = TextCapitalization.none,
     TextInputType type = TextInputType.text,
-  }) => TextFormField(
+  }) => TextField(
     controller: ctrl,
     keyboardType: type,
     textCapitalization: capitalization,
+    enabled: !_loading,
     style: GoogleFonts.poppins(fontSize: 14),
     decoration: InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.poppins(
-        color: AppColors.textHint, fontSize: 14),
-      prefixIcon: Icon(icon,
-        color: AppColors.textSecondary, size: 20),
+      hintStyle: GoogleFonts.poppins(color: AppColors.textHint, fontSize: 14),
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: AppColors.divider, width: 1.5)),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: AppColors.divider, width: 1.5)),
+        borderSide: const BorderSide(color: AppColors.divider, width: 1.5)),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: AppColors.driverColor, width: 2)),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 14, vertical: 14)));
+        borderSide: const BorderSide(color: AppColors.driverColor, width: 2)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14)));
 
   Widget _errorBox(String msg) => Container(
     padding: const EdgeInsets.all(12),
@@ -458,23 +428,9 @@ class _DriverStep2VehicleState extends State<DriverStep2Vehicle> {
       color: AppColors.error.withOpacity(0.08),
       borderRadius: BorderRadius.circular(10)),
     child: Row(children: [
-      const Icon(Icons.error_outline,
-        color: AppColors.error, size: 18),
+      const Icon(Icons.error_outline, color: AppColors.error, size: 18),
       const SizedBox(width: 8),
       Expanded(child: Text(msg, style: GoogleFonts.poppins(
         fontSize: 13, color: AppColors.error))),
     ]));
-
-  Widget _nextBtn(String label, VoidCallback onTap) => SizedBox(
-    width: double.infinity, height: 54,
-    child: ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.driverColor,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14)),
-        elevation: 0),
-      child: Text(label, style: GoogleFonts.poppins(
-        fontSize: 15, fontWeight: FontWeight.w600))));
 }
