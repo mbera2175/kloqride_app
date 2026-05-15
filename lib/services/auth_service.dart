@@ -26,6 +26,15 @@ class AuthService {
     if (data['language'] != null) {
       await _prefs?.setString(AppConstants.keyLanguage, data['language']);
     }
+    // Driver approval status
+    if (data['is_approved'] != null) {
+      await _prefs?.setBool('is_approved', data['is_approved'] == true);
+    }
+    // Profile picture URL
+    final picUrl = (data['profile_pic'] ?? data['profile_pic_url'] ?? '') as String;
+    if (picUrl.isNotEmpty) {
+      await _prefs?.setString('profile_pic', picUrl);
+    }
   }
 
   // ── Getters ─────────────────────────────────────────────
@@ -40,10 +49,21 @@ class AuthService {
   static bool    get isLoggedIn    => token.isNotEmpty;
   static bool    get isDriver      => role == 'driver';
   static bool    get isRider       => role == 'rider';
+  static bool    get isApproved    => _prefs?.getBool('is_approved')                ?? false;
+  static String  get profilePic    => _prefs?.getString('profile_pic')              ?? '';
 
   // ── Update wallet locally ────────────────────────────────
   static Future<void> updateWallet(double balance) async {
     await _prefs?.setDouble('wallet_balance', balance);
+  }
+
+  // ── Update approval status & profile pic locally ─────────
+  static Future<void> updateApprovalStatus(bool approved) async {
+    await _prefs?.setBool('is_approved', approved);
+  }
+
+  static Future<void> updateProfilePic(String url) async {
+    await _prefs?.setString('profile_pic', url);
   }
 
   // ── Logout ──────────────────────────────────────────────
