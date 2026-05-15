@@ -5,6 +5,7 @@ import '../../utils/app_colors.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../auth/role_selection_screen.dart';
+import 'my_documents_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
@@ -42,6 +43,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     _getLocation();
     _loadEarnings();
     _checkActiveTrip();
+    _refreshProfileStatus();
   }
 
   // ── Location ───────────────────────────────────────────
@@ -187,6 +189,24 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     final res = await ApiService.getEarningsSummary();
     if (res['success']) {
       setState(() => _earnings = res['data']);
+    }
+  }
+
+  // ── Refresh approval status from backend ──────────────
+
+  Future<void> _refreshProfileStatus() async {
+    final res = await ApiService.getMe();
+    if (res['success']) {
+      final data = res['data'];
+      final driver = data['driver'];
+      if (driver != null) {
+        await AuthService.updateApprovalStatus(driver['is_approved'] == true);
+        final pic = driver['profile_pic_url'] ?? data['profile_pic'] ?? '';
+        if ((pic as String).isNotEmpty) {
+          await AuthService.updateProfilePic(pic);
+        }
+      }
+      if (mounted) setState(() {});
     }
   }
 
@@ -904,20 +924,62 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   // ── Profile Tab ────────────────────────────────────────
 
   Widget _profileTab() {
+    final isApproved = AuthService.isApproved;
+    final profilePic = AuthService.profilePic;
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(children: [
           const SizedBox(height: 10),
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.driverColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person_rounded,
-                color: AppColors.driverColor, size: 40),
+
+          // ── Profile picture (not changeable by driver) ──
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 90, height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isApproved
+                        ? AppColors.success
+                        : AppColors.warning,
+                    width: 3),
+                ),
+                child: ClipOval(
+                  child: profilePic.isNotEmpty
+                    ? Image.network(
+                        profilePic,
+                        fit: BoxFit.cover,
+                        width: 90, height: 90,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.driverColor.withOpacity(0.1),
+                          child: const Icon(Icons.person_rounded,
+                            color: AppColors.driverColor, size: 44)),
+                      )
+                    : Container(
+                        color: AppColors.driverColor.withOpacity(0.1),
+                        child: const Icon(Icons.person_rounded,
+                          color: AppColors.driverColor, size: 44)),
+                ),
+              ),
+              // Lock badge — only admin can change pic
+              Positioned(
+                bottom: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.textSecondary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2)),
+                  child: const Icon(Icons.lock_rounded,
+                    color: Colors.white, size: 12),
+                ),
+              ),
+            ],
           ),
+
           const SizedBox(height: 12),
           Text(AuthService.name,
             style: GoogleFonts.poppins(
@@ -925,18 +987,75 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           Text('+91 ${AuthService.phone}',
             style: GoogleFonts.poppins(
               fontSize: 13, color: AppColors.textSecondary)),
+
+          const SizedBox(height: 10),
+
+          // ── Verification / Approval status badge ────────
           Container(
-            margin: const EdgeInsets.only(top: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: isApproved
+                  ? AppColors.success.withOpacity(0.1)
+                  : AppColors.warning.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isApproved
+                    ? AppColors.success.withOpacity(0.4)
+                    : AppColors.warning.withOpacity(0.4)),
             ),
-            child: Text('✅ Approved Driver',
-              style: GoogleFonts.poppins(
-                fontSize: 12, fontWeight: FontWeight.w600,
-                color: AppColors.success)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+              Icon(
+                isApproved
+                  ? Icons.verified_rounded
+                  : Icons.hourglass_top_rounded,
+                size: 16,
+                color: isApproved
+                  ? AppColors.success
+                  : AppColors.warning),
+              const SizedBox(width: 6),
+              Text(
+                isApproved
+                  ? 'Profile Approved ✅'
+                  : 'Your profile is under verification ⏳',
+                style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: isApproved
+                    ? AppColors.success
+                    : AppColors.warning)),
+            ]),
           ),
+
+          // ── Info message if not yet approved ────────────
+          if (!isApproved) ...[
+            const SizedBox(height: 10),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.info.withOpacity(0.25))),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                const Icon(Icons.info_outline_rounded,
+                  color: AppColors.info, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  'Admin is reviewing your documents. '
+                  'You will be notified once approved. '
+                  'Make sure all documents are uploaded.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11, color: AppColors.info,
+                    height: 1.5))),
+              ]),
+            ),
+          ],
+
           const SizedBox(height: 24),
 
           _profileMenuItem(Icons.bar_chart_rounded, 'Earnings',
@@ -945,8 +1064,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               () => setState(() => _navIndex = 2)),
           _profileMenuItem(Icons.account_balance_rounded,
               'Bank / UPI Details', () {}),
-          _profileMenuItem(Icons.description_rounded,
-              'My Documents', () {}),
+          // My Documents — navigates to document upload/view screen
+          _profileMenuItem(Icons.description_rounded, 'My Documents', () {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => MyDocumentsScreen(
+                driverId: AuthService.driverId)));
+          }),
           _profileMenuItem(Icons.help_outline_rounded,
               'Help & Support', () {}),
           const Divider(height: 32),
