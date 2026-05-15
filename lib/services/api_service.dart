@@ -7,6 +7,9 @@ import 'auth_service.dart';
 class ApiService {
   static final String _base = AppConstants.baseUrl;
 
+  // ── Timeout duration for all requests ───────────────────
+  static const _timeout = Duration(seconds: 30);
+
   // ── Headers ─────────────────────────────────────────────
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
@@ -50,39 +53,45 @@ class ApiService {
   static Future<Map<String, dynamic>> sendOtp(String phone, String role) async {
     final res = await http.post(Uri.parse('$_base/auth/otp/send'),
       headers: _headers,
-      body: jsonEncode({'phone': phone, 'role': role}));
+      body: jsonEncode({'phone': phone, 'role': role}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> otpLogin(String phone, String otp) async {
     final res = await http.post(Uri.parse('$_base/auth/otp/login'),
       headers: _headers,
-      body: jsonEncode({'phone': phone, 'otp': otp}));
+      body: jsonEncode({'phone': phone, 'otp': otp}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> passwordLogin(String phone, String password) async {
     final res = await http.post(Uri.parse('$_base/auth/password/login'),
       headers: _headers,
-      body: jsonEncode({'phone': phone, 'password': password}));
+      body: jsonEncode({'phone': phone, 'password': password}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> registerRider(Map<String, dynamic> body) async {
     final res = await http.post(Uri.parse('$_base/auth/register/rider'),
-      headers: _headers, body: jsonEncode(body));
+      headers: _headers, body: jsonEncode(body))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> registerDriver(Map<String, dynamic> body) async {
     final res = await http.post(Uri.parse('$_base/auth/register/driver'),
-      headers: _headers, body: jsonEncode(body));
+      headers: _headers, body: jsonEncode(body))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getMe() async {
     final res = await http.get(Uri.parse('$_base/auth/me'),
-      headers: _authHeaders);
+      headers: _authHeaders)
+      .timeout(_timeout);
     return _handle(res);
   }
 
@@ -114,7 +123,7 @@ class ApiService {
         filename: '$docType.jpg',
       ));
 
-      final streamed = await request.send();
+      final streamed = await request.send().timeout(_timeout);
       final res      = await http.Response.fromStream(streamed);
       return _handle(res);
 
@@ -124,16 +133,24 @@ class ApiService {
   }
 
   /// Save text document details (RC number, DL number, Aadhaar number, years).
+  /// FIX: Field names now match backend DocumentDetailsReq schema exactly.
+  /// Backend expects: license_number (str), license_expiry (YYYY-MM-DD string)
   static Future<Map<String, dynamic>> saveDocumentDetails({
     required int    driverId,
     String?         rcNumber,
     int?            rcRegYear,
     int?            rcExpireYear,
-    String?         dlNumber,
-    int?            dlExpireYear,
+    String?         dlNumber,       // sent as 'license_number' to backend
+    int?            dlExpireYear,   // converted to 'license_expiry' YYYY-MM-DD
     String?         aadhaarNumber,
   }) async {
     try {
+      // Convert dlExpireYear integer to YYYY-MM-DD string backend expects
+      // e.g. 2026 → "2026-01-01"
+      final String? licenseExpiry = dlExpireYear != null
+          ? '$dlExpireYear-01-01'
+          : null;
+
       final res = await http.post(
         Uri.parse('$_base/documents/details/$driverId'),
         headers: _authHeaders,
@@ -141,11 +158,11 @@ class ApiService {
           if (rcNumber      != null) 'rc_number'        : rcNumber,
           if (rcRegYear     != null) 'registration_year': rcRegYear,
           if (rcExpireYear  != null) 'rc_expiry_year'   : rcExpireYear,
-          if (dlNumber      != null) 'dl_number'        : dlNumber,
-          if (dlExpireYear  != null) 'dl_expiry_year'   : dlExpireYear,
+          if (dlNumber      != null) 'license_number'   : dlNumber,   // ✅ FIXED
+          if (licenseExpiry != null) 'license_expiry'   : licenseExpiry, // ✅ FIXED
           if (aadhaarNumber != null) 'aadhaar_number'   : aadhaarNumber,
         }),
-      );
+      ).timeout(_timeout);
       return _handle(res);
     } catch (e) {
       return {'success': false, 'error': 'Failed to save details: $e'};
@@ -157,7 +174,7 @@ class ApiService {
     final res = await http.get(
       Uri.parse('$_base/documents/$driverId'),
       headers: _authHeaders,
-    );
+    ).timeout(_timeout);
     return _handle(res);
   }
 
@@ -177,52 +194,55 @@ class ApiService {
         'pickup_lat'  : pickupLat,  'pickup_lng': pickupLng,
         'drop_lat'    : dropLat,    'drop_lng'  : dropLng,
         'vehicle_type': vehicleType,'service_type': serviceType,
-      }));
+      })).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> bookTrip(Map<String, dynamic> body) async {
     final res = await http.post(Uri.parse('$_base/rider/trips/book'),
-      headers: _authHeaders, body: jsonEncode(body));
+      headers: _authHeaders, body: jsonEncode(body))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getActiveTrip() async {
     final res = await http.get(Uri.parse('$_base/rider/trips/active'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getRiderHistory({int limit = 20, int offset = 0}) async {
     final res = await http.get(
       Uri.parse('$_base/rider/trips/history?limit=$limit&offset=$offset'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> cancelRiderTrip(int tripId, String reason) async {
     final res = await http.post(Uri.parse('$_base/rider/trips/$tripId/cancel'),
-      headers: _authHeaders, body: jsonEncode({'reason': reason}));
+      headers: _authHeaders, body: jsonEncode({'reason': reason}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> rateDriver(int tripId, int score, String? comment) async {
     final res = await http.post(Uri.parse('$_base/rider/trips/$tripId/rate'),
       headers: _authHeaders,
-      body: jsonEncode({'score': score, 'comment': comment}));
+      body: jsonEncode({'score': score, 'comment': comment}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> applyPromo(String code, double fare) async {
     final res = await http.get(
       Uri.parse('$_base/rider/promo/apply?code=$code&fare=$fare'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getSavedAddresses() async {
     final res = await http.get(Uri.parse('$_base/rider/addresses'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
@@ -233,61 +253,62 @@ class ApiService {
   static Future<Map<String, dynamic>> updateLocation(double lat, double lng) async {
     final res = await http.patch(
       Uri.parse('$_base/driver/location?lat=$lat&lng=$lng'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> toggleOnline() async {
     final res = await http.patch(Uri.parse('$_base/driver/toggle-online'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getAvailableTrips() async {
     final res = await http.get(Uri.parse('$_base/driver/trips/available'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getDriverActiveTrip() async {
     final res = await http.get(Uri.parse('$_base/driver/trips/active'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> acceptTrip(int tripId) async {
     final res = await http.patch(Uri.parse('$_base/driver/trips/$tripId/accept'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> markArrived(int tripId) async {
     final res = await http.patch(Uri.parse('$_base/driver/trips/$tripId/arrived'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> startTrip(int tripId) async {
     final res = await http.patch(Uri.parse('$_base/driver/trips/$tripId/start'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> completeTrip(int tripId) async {
     final res = await http.patch(Uri.parse('$_base/driver/trips/$tripId/complete'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> cancelDriverTrip(int tripId, String reason) async {
     final res = await http.patch(Uri.parse('$_base/driver/trips/$tripId/cancel'),
-      headers: _authHeaders, body: jsonEncode({'reason': reason}));
+      headers: _authHeaders, body: jsonEncode({'reason': reason}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getEarningsSummary() async {
     final res = await http.get(Uri.parse('$_base/driver/earnings/summary'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
@@ -295,14 +316,15 @@ class ApiService {
       double amount, String? upiId) async {
     final res = await http.post(Uri.parse('$_base/driver/earnings/withdraw'),
       headers: _authHeaders,
-      body: jsonEncode({'amount': amount, 'upi_id': upiId}));
+      body: jsonEncode({'amount': amount, 'upi_id': upiId}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getDriverHistory({int limit = 20, int offset = 0}) async {
     final res = await http.get(
       Uri.parse('$_base/driver/trips/history?limit=$limit&offset=$offset'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
@@ -313,31 +335,32 @@ class ApiService {
   static Future<Map<String, dynamic>> getNotifications({bool unread = false}) async {
     final res = await http.get(
       Uri.parse('$_base/notifications?unread_only=$unread'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> markAllRead() async {
     final res = await http.patch(Uri.parse('$_base/notifications/read-all'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getWalletBalance() async {
     final res = await http.get(Uri.parse('$_base/wallet/balance'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> getWalletTransactions() async {
     final res = await http.get(Uri.parse('$_base/wallet/transactions'),
-      headers: _authHeaders);
+      headers: _authHeaders).timeout(_timeout);
     return _handle(res);
   }
 
   static Future<Map<String, dynamic>> addMoneyToWallet(double amount) async {
     final res = await http.post(Uri.parse('$_base/wallet/add-money'),
-      headers: _authHeaders, body: jsonEncode({'amount': amount}));
+      headers: _authHeaders, body: jsonEncode({'amount': amount}))
+      .timeout(_timeout);
     return _handle(res);
   }
 
@@ -348,7 +371,7 @@ class ApiService {
       body: jsonEncode({
         'category': category, 'subject': subject,
         'message': message,   'trip_id': tripId,
-      }));
+      })).timeout(_timeout);
     return _handle(res);
   }
 }
