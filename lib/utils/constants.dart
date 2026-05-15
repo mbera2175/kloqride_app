@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // ── API ──────────────────────────────────────────────
-  static const String baseUrl = 'https://kloqridebackendv2-production.up.railway.app';
+  static const String baseUrl = 'https://kridebackend-production.up.railway.app';
 
   // ── App Info ─────────────────────────────────────────
   static const String appName    = 'KloqRide';
