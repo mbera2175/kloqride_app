@@ -1055,6 +1055,22 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ]),
             ),
           ],
+          const SizedBox(height: 8),
+
+        // ── Refresh Status Button ────────────────────────
+        TextButton.icon(
+          onPressed: () async {
+            await _refreshProfileStatus();
+            if (mounted) setState(() {});
+          },
+          icon: const Icon(Icons.refresh_rounded, size: 16),
+          label: Text('Refresh Status',
+            style: GoogleFonts.poppins(fontSize: 12)),
+          style: TextButton.styleFrom(
+            foregroundColor: isApproved
+                ? AppColors.success
+                : AppColors.warning),
+        ),
 
           const SizedBox(height: 24),
 
@@ -1084,7 +1100,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   Widget _bottomNav() => NavigationBar(
     selectedIndex: _navIndex,
-    onDestinationSelected: (i) => setState(() => _navIndex = i),
+    onDestinationSelected: (i) {
+      setState(() => _navIndex = i);
+      if (i == 3) _refreshProfileStatus();
+    },
     backgroundColor: AppColors.white,
     indicatorColor: AppColors.driverColor.withOpacity(0.12),
     destinations: [

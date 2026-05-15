@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
+import 'auth/role_selection_screen.dart';
+import 'rider/rider_home_screen.dart';
+import 'driver/driver_home_screen.dart';
+import '../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   final bool isLoggedIn;
@@ -41,7 +45,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           context,
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 600),
-            pageBuilder: (_, __, ___) => widget.isLoggedIn ? const HomeScreen() : const LoginScreen(),
+            pageBuilder: (_, __, ___) => widget.isLoggedIn 
+                ? (AuthService.isRider ? const RiderHomeScreen() : const DriverHomeScreen())
+                : const RoleSelectionScreen(),
             transitionsBuilder: (_, animation, __, child) {
               return FadeTransition(opacity: animation, child: child);
             },
