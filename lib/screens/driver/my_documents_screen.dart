@@ -68,14 +68,16 @@ class _MyDocumentsScreenState extends State<MyDocumentsScreen> {
 
       // Pre-fill text fields
       _rcNumberCtrl.text  = data['rc_number']   ?? '';
-      _dlNumberCtrl.text  = data['dl_number']   ?? data['license_number'] ?? '';
+      _dlNumberCtrl.text  = data['license_number'] ?? '';
       _aadhaarCtrl.text   = data['aadhaar_number'] ?? data['aadhar_number'] ?? '';
       if (data['registration_year'] != null)
         _rcRegYear    = int.tryParse('${data['registration_year']}')  ?? _rcRegYear;
       if (data['rc_expiry_year'] != null)
         _rcExpireYear = int.tryParse('${data['rc_expiry_year']}')     ?? _rcExpireYear;
-      if (data['dl_expiry_year'] != null)
-        _dlExpireYear = int.tryParse('${data['dl_expiry_year']}')     ?? _dlExpireYear;
+      // FIX: backend returns 'license_expiry' as YYYY-MM-DD string, not 'dl_expiry_year'
+      final licenseExpiry = data['license_expiry'] as String?;
+      if (licenseExpiry != null && licenseExpiry.length >= 4)
+        _dlExpireYear = int.tryParse(licenseExpiry.substring(0, 4)) ?? _dlExpireYear;
     }
     setState(() => _loading = false);
   }
